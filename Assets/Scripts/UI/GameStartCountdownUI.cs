@@ -1,57 +1,83 @@
 using System.Collections;
-using System.Collections.Generic;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UIElements;
 
-public class GameStartCountdownUI : MonoBehaviour {
-
-
-
-    private const string NUMBER_POPUP = "NumberPopup";
-
-
+public class GameStartCountdownUI : MonoBehaviour
+{
     [SerializeField] private TextMeshProUGUI countdownText;
+    [SerializeField] private GameTimer gameTimer;
+    [SerializeField] private Animator animator;
+    private Player player;
+    public static GameStartCountdownUI Instance { get; private set; }
 
-
-    private Animator animator;
-    private int previousCountdownNumber;
-
-    
-    private void Awake() {
-        animator = GetComponent<Animator>();
-    }
-
-    private void Start() {
-        KitchenGameManager.Instance.OnStateChanged += KitchenGameManager_OnStateChanged;
-
-        Hide();
-    }
-
-    private void KitchenGameManager_OnStateChanged(object sender, System.EventArgs e) {
-        if (KitchenGameManager.Instance.IsCountdownToStartActive()) {
-            Show();
-        } else {
-            Hide();
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
         }
+
+        Instance = this;
     }
 
-    private void Update() {
-        int countdownNumber = Mathf.CeilToInt(KitchenGameManager.Instance.GetCountdownToStartTimer());
-        countdownText.text = countdownNumber.ToString();
-
-        if (previousCountdownNumber != countdownNumber) {
-            previousCountdownNumber = countdownNumber;
-            animator.SetTrigger(NUMBER_POPUP);
-            SoundManager.Instance.PlayCountdownSound();
-        }
-    }
-
-    private void Show() {
+    public void StartCountdown()
+    {
         gameObject.SetActive(true);
+        StartCoroutine(CountdownRoutine());
     }
 
-    private void Hide() {
+    private IEnumerator CountdownRoutine()
+    {
+        int count = 3;
+        SoundManager.Instance?.PlayGlobalSound(SoundManager.Instance.countdownClip);
+
+        while (count > 0)
+        {
+            if (this == null || !gameObject.activeInHierarchy)
+                yield break;
+
+            countdownText.text = count.ToString();
+            if (animator != null) animator.SetTrigger("NumberPopup");
+            yield return new WaitForSeconds(1f);
+            count--;
+        }
+
+        if (this == null || !gameObject.activeInHierarchy)
+            yield break;
+
+        countdownText.text = "GO!";
+        if (animator != null) animator.SetTrigger("NumberPopup");
+
+        Player localPlayer = null;
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
+            localPlayer = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<Player>();
+        
+
+        yield return new WaitForSeconds(1f);
         gameObject.SetActive(false);
+
+        if (gameTimer == null || player == null)
+            yield break;
+
+        gameTimer.isTimerRunning = true;
+        localPlayer.isGameStarted = true;
+        Bot.GameHasStarted = true;
+    }
+
+    public void InjectDependencies(GameTimer timer, Player movement)
+    {
+        gameTimer = timer;
+        player = movement;
+    }
+
+    private void OnDestroy()
+    {
+        StopAllCoroutines();
+        if (Instance == this)
+            Instance = null;
     }
 
 }

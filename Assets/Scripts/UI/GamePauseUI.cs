@@ -1,54 +1,100 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.UI;
+using System.Collections;
 
-public class GamePauseUI : MonoBehaviour {
+public class GamePauseUI : MonoBehaviour
+{
+    private static GamePauseUI instance;
+    private bool isHostPaused;
 
-
-    [SerializeField] private Button resumeButton;
-    [SerializeField] private Button mainMenuButton;
-    [SerializeField] private Button optionsButton;
-
-
-    private void Awake() {
-        resumeButton.onClick.AddListener(() => {
-            KitchenGameManager.Instance.TogglePauseGame();
-        });
-        mainMenuButton.onClick.AddListener(() => {
-            NetworkManager.Singleton.Shutdown();
-            Loader.Load(Loader.Scene.MainMenuScene);
-        });
-        optionsButton.onClick.AddListener(() => {
-            Hide();
-            OptionsUI.Instance.Show(Show);
-        });
+    public static GamePauseUI Instance
+    {
+        get => instance;
+        set => instance = value;
     }
 
-    private void Start() {
-        KitchenGameManager.Instance.OnLocalGamePaused += KitchenGameManager_OnLocalGamePaused;
-        KitchenGameManager.Instance.OnLocalGameUnpaused += KitchenGameManager_OnLocalGameUnpaused;
+    public static bool InstanceShown => instance != null && instance.isHostPaused;
 
-        Hide();
+    [SerializeField] private GameObject pausePanel;
+
+    private void Awake()
+    {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        instance = this;
+        pausePanel.SetActive(false);
     }
 
-    private void KitchenGameManager_OnLocalGameUnpaused(object sender, System.EventArgs e) {
-        Hide();
+    private void OnDestroy()
+    {
+        ResetState();
     }
 
-    private void KitchenGameManager_OnLocalGamePaused(object sender, System.EventArgs e) {
-        Show();
+    public static void ResetState()
+    {
+        if (instance != null)
+        {
+            instance.isHostPaused = false;
+            instance.pausePanel.SetActive(false);
+            instance = null;
+        }
     }
 
-    private void Show() {
+    public void ShowPause()
+    {
+        if (isHostPaused) return;
+        Debug.Log("Showing pause panel");
         gameObject.SetActive(true);
-
-        resumeButton.Select();
+        isHostPaused = true;
+        pausePanel.SetActive(true);
     }
 
-    private void Hide() {
+    private Coroutine pauseBufferCoroutine;
+
+    public void ShowPauseBuffered(float bufferTime = 1f)
+    {
+        if (GameOverUI.GameHasEnded || this == null) return;
+
+        if (!gameObject.activeInHierarchy)
+            gameObject.SetActive(true);
+
+        if (pauseBufferCoroutine != null)
+            StopCoroutine(pauseBufferCoroutine);
+
+        pauseBufferCoroutine = StartCoroutine(BufferPause(bufferTime));
+    }
+
+    private IEnumerator BufferPause(float bufferTime)
+    {
+        yield return new WaitForSecondsRealtime(bufferTime);
+
+        if (GameOverUI.GameHasEnded || this == null) yield break;
+
+        if (!isHostPaused)
+        {
+            Debug.Log("Showing buffered pause panel");
+            gameObject.SetActive(true);
+            isHostPaused = true;
+            pausePanel.SetActive(true);
+        }
+    }
+
+    public void HidePause()
+    {
+        if (pauseBufferCoroutine != null)
+        {
+            StopCoroutine(pauseBufferCoroutine);
+            pauseBufferCoroutine = null;
+        }
+
+        isHostPaused = false;
+        pausePanel.SetActive(false);
         gameObject.SetActive(false);
     }
+
+
 
 }

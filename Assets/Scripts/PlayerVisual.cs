@@ -1,24 +1,26 @@
-using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode.Components;
 using UnityEngine;
 
-public class PlayerVisual : MonoBehaviour {
+public class PlayerVisual : MonoBehaviour
+{
+
+    public Animator CurrentAnimator { get; private set; }
+
+    [SerializeField] private NetworkAnimator networkAnimator;
 
 
-    [SerializeField] private MeshRenderer headMeshRenderer;
-    [SerializeField] private MeshRenderer bodyMeshRenderer;
+    private NetworkAnimator netAnim;
+    public CharacterAudioProfile CurrentAudioProfile { get; private set; }
 
-
-    private Material material;
-
-    private void Awake() {
-        material = new Material(headMeshRenderer.material);
-        headMeshRenderer.material = material;
-        bodyMeshRenderer.material = material;
+    private void Awake()
+    {
+        netAnim = GetComponent<NetworkAnimator>();
+        if (netAnim != null)
+        {
+            netAnim.enabled = false;
+        }
     }
 
-    public void SetPlayerColor(Color color) {
-        material.color = color;
-    }
 
 }

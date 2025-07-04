@@ -8,8 +8,8 @@ public static class Loader {
 
 
     public enum Scene {
-        MainMenuScene,
-        GameScene,
+        HomeScene,
+        CardGameScene,
         LoadingScene,
         LobbyScene,
         CharacterSelectScene,
