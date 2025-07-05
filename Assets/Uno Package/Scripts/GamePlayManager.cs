@@ -85,12 +85,8 @@ public class GamePlayManager : MonoBehaviour
             SetTotalPlayer(4);
             SetupGame();
         }
-        else
-        {
-            StartCoroutine(CheckNetwork());
-            playerChoose.ShowPopup();
-        }
     }
+
 
     public void OnPlayerSelect(ToggleGroup group)
     {
@@ -158,7 +154,7 @@ public class GamePlayManager : MonoBehaviour
         }
     }
 
-    void SetupGame()
+    public void SetupGame()
     {
         menuButton.SetActive(true);
         currentPlayerIndex = Random.Range(0, players.Count);
@@ -654,6 +650,46 @@ public class GamePlayManager : MonoBehaviour
         rayCastBlocker.SetActive(false);
 
     }
+
+    public void SetupNetworkedPlayerSeats()
+    {
+        for (int i = 0; i < players.Count; i++)
+        {
+            players[i].gameObject.SetActive(true);
+            players[i].CardPanelBG.SetActive(true);
+        }
+
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int totalPlayers = playerList.Count;
+        int myIndex = MultiplayerManager.Instance.GetPlayerDataIndexFromClientId(Unity.Netcode.NetworkManager.Singleton.LocalClientId);
+
+        for (int seat = 0; seat < totalPlayers; seat++)
+        {
+            int dataIndex = (myIndex + seat) % totalPlayers;
+            PlayerData pd = playerList[dataIndex];
+            Player2 p2 = players[seat];
+
+            p2.SetAvatarProfile(new AvatarProfile
+            {
+                avatarIndex = pd.avatarIndex,
+                avatarName = pd.playerName.ToString()
+            });
+            p2.isUserPlayer = (seat == 0);
+        }
+    }
+
+
+    public void StartMultiplayerGame()
+    {
+        menuButton.SetActive(true);
+        currentPlayerIndex = Random.Range(0, players.Count);
+
+        CreateDeck();
+        cards.Shuffle();
+        StartCoroutine(DealCards(3));
+    }
+
+
 }
 
 [System.Serializable]

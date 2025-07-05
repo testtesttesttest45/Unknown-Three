@@ -42,6 +42,7 @@ public class LobbyManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         InitializeUnityAuthentication();
+        CardGameManager.currentGameMode = GameMode.MultiPlayer;
     }
 
     private async void InitializeUnityAuthentication()
@@ -198,13 +199,13 @@ public class LobbyManager : MonoBehaviour
         OnCreateLobbyStarted?.Invoke(this, EventArgs.Empty);
         try
         {
-            string playerName = CardGameManager.PlayerAvatarName;
-            string finalLobbyName = string.IsNullOrWhiteSpace(playerName) ? "Unknown's Lobby" : $"{playerName}'s Lobby";
+            string finalLobbyName = string.IsNullOrWhiteSpace(lobbyName) ? $"{CardGameManager.PlayerAvatarName}'s Lobby" : lobbyName;
 
             joinedLobby = await LobbyService.Instance.CreateLobbyAsync(finalLobbyName, MultiplayerManager.MAX_PLAYER_AMOUNT, new CreateLobbyOptions
             {
-                IsPrivate = true,
+                IsPrivate = isPrivate,
             });
+
 
             Allocation allocation = await AllocateRelay();
 

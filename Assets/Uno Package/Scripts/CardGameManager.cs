@@ -6,7 +6,7 @@ public class CardGameManager : MonoBehaviour
 {
     public const int TOTAL_AVATAR = 15;
     public static AudioSource audioSource;
-    public static GameMode currentGameMode = GameMode.Computer;
+    public static GameMode currentGameMode = GameMode.MultiPlayer;
     public AudioClip buttonClip;
     public static AudioClip _buttonClip;
 

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class GameScene : MonoBehaviour
+public class CardGameScene : MonoBehaviour
 {
-    public static GameScene instance;
+    public static CardGameScene instance;
     public Popup menuPopup, exitPopup;
     public Toggle menuSfxToggle;
 
@@ -22,10 +22,27 @@ public class GameScene : MonoBehaviour
         });
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
-        // CUtils.ShowInterstitialAd();
+        while (MultiplayerManager.Instance == null || MultiplayerManager.Instance.playerDataNetworkList == null)
+            yield return null;
+        while (MultiplayerManager.Instance.playerDataNetworkList.Count < 4)
+            yield return null;
+        yield return null;
+
+        if (CardGameManager.currentGameMode == GameMode.MultiPlayer)
+        {
+            GamePlayManager.instance.SetupNetworkedPlayerSeats();
+            GamePlayManager.instance.StartMultiplayerGame();
+        }
+        else
+        {
+            GamePlayManager.instance.SetupGame();
+        }
+
     }
+
+
 
     void Update()
     {
