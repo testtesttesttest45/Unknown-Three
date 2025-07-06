@@ -49,13 +49,13 @@ public class PlayerCards : MonoBehaviour
 
     public void UpdatePos(float delay = 0f)
     {
-
 #if UNITY_EDITOR
         if (!UnityEditor.EditorApplication.isPlaying)
             cards = new List<Card>(GetComponentsInChildren<Card>());
 #endif
-        if (cards.Count > 0 && cards[0].IsOpen)
-            cards.Sort((x, y) => y.Type.CompareTo(x.Type));
+        // if (cards.Count > 0 && cards[0].IsOpen)
+        //     cards.Sort((x, y) => y.Type.CompareTo(x.Type));
+
         float space = 0;
         float start = 0;
         float totalWidht = GetComponent<RectTransform>().sizeDelta.x;
@@ -69,7 +69,6 @@ public class PlayerCards : MonoBehaviour
             }
             start = (totalWidht / -2) + cardSize.x / 2;
         }
-
 
         for (int i = 0; i < cards.Count; i++)
         {
@@ -85,11 +84,12 @@ public class PlayerCards : MonoBehaviour
             else
                 cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
 #else
-			cards [i].SetTargetPosAndRot(new Vector3 (start, 0f,0f),0f);
+        cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
 #endif
             start += space;
         }
     }
+
 
     public int GetCount(CardType t)
     {

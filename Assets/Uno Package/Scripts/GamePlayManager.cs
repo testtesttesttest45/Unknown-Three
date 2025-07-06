@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Unity.Netcode;
 #pragma warning disable 0618
 
-public class GamePlayManager : MonoBehaviour
+public class GamePlayManager : NetworkBehaviour
 {
     [Header("Sound")]
     public AudioClip music_win_clip;
@@ -80,122 +81,8 @@ public class GamePlayManager : MonoBehaviour
     {
         instance = this;
         Input.multiTouchEnabled = false;
-        if (CardGameManager.currentGameMode == GameMode.Computer)
-        {
-            SetTotalPlayer(4);
-            SetupGame();
-        }
     }
 
-
-    public void OnPlayerSelect(ToggleGroup group)
-    {
-        playerChoose.HidePopup(false);
-        int i = 4;
-        foreach (var t in group.ActiveToggles())
-        {
-            i = int.Parse(t.name);
-        }
-        StartCoroutine(StartMultiPlayerGameMode(i));
-        CardGameManager.PlayButton();
-    }
-
-    IEnumerator StartMultiPlayerGameMode(int i)
-    {
-        loadingView.SetActive(true);
-        yield return new WaitForSeconds(Random.Range(3f, 10f));
-        loadingView.SetActive(false);
-        SetTotalPlayer(i);
-        SetupGame();
-
-        bool leftRoom = Random.Range(0, 100) <= LeftRoomProbability && players.Count > 2;
-        if (leftRoom)
-        {
-            float inTime = Random.Range(7, 5 * 60);
-            StartCoroutine(RemovePlayerFromRoom(inTime));
-        }
-
-        multiplayerLoaded = true;
-    }
-
-    void SetTotalPlayer(int totalPlayer = 4)
-    {
-        cardDeckBtn.SetActive(true);
-        cardWastePile.gameObject.SetActive(true);
-        unoBtn.SetActive(true);
-        if (totalPlayer == 2)
-        {
-            players[0].gameObject.SetActive(true);
-            players[0].CardPanelBG.SetActive(true);
-            players[2].gameObject.SetActive(true);
-            players[2].CardPanelBG.SetActive(true);
-            players.RemoveAt(3);
-            players.RemoveAt(1);
-
-        }
-        else if (totalPlayer == 3)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                players[i].gameObject.SetActive(true);
-                players[i].CardPanelBG.SetActive(true);
-            }
-            players[3].CardPanelBG.SetActive(true);
-            players.RemoveAt(3);
-
-        }
-        else
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                players[i].gameObject.SetActive(true);
-                players[i].CardPanelBG.SetActive(true);
-            }
-        }
-    }
-
-    public void SetupGame()
-    {
-        menuButton.SetActive(true);
-        currentPlayerIndex = Random.Range(0, players.Count);
-        players[0].SetAvatarProfile(CardGameManager.PlayerAvatarProfile);
-
-        if (CardGameManager.currentGameMode == GameMode.MultiPlayer)
-        {
-            string[] nameList = multiplayerNames.text.Split('\n');
-            List<int> indexes = new List<int>();
-
-            for (int i = 1; i < players.Count; i++)
-            {
-                while (true)
-                {
-                    int index = Random.Range(0, nameList.Length);
-                    var name = nameList[index].Trim();
-                    if (name.Length == 0) continue;
-
-                    if (!indexes.Contains(index))
-                    {
-                        indexes.Add(index);
-                        if (Random.value < LowercaseNameProbability / 100f) name = name.ToLower();
-                        players[i].SetAvatarProfile(new AvatarProfile { avatarIndex = index % CardGameManager.TOTAL_AVATAR, avatarName = name });
-                        break;
-                    }
-                }
-            }
-        }
-        else
-        {
-            var profiles = JsonUtility.FromJson<AvatarProfiles>(computerProfiles.text).profiles;
-            for(int i = 0; i < profiles.Count; i++)
-            {
-                players[i + 1].SetAvatarProfile(profiles[i]);
-            }
-        }
-
-        CreateDeck();
-        cards.Shuffle();
-        StartCoroutine(DealCards(3));
-    }
 
     void CreateDeck()
     {
@@ -218,45 +105,20 @@ public class GamePlayManager : MonoBehaviour
 
     Card CreateCardOnDeck(CardType t, CardValue v)
     {
-        Card temp = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, cardDeckTransform);
+        Card temp = Instantiate(_cardPrefab, cardDeckTransform);
+
+
         temp.Type = t;
         temp.Value = v;
         temp.IsOpen = false;
         temp.CalcPoint();
         temp.name = t.ToString() + "_" + v.ToString();
+
+
         return temp;
     }
 
-    IEnumerator DealCards(int total)
-    {
-        yield return new WaitForSeconds(1f);
-        for (int t = 0; t < total; t++)
-        {
-            for (int i = 0; i < players.Count; i++)
-            {
-                PickCardFromDeck(players[i]);
-                yield return new WaitForSeconds(cardDealTime);
-            }
-        }
 
-        yield return new WaitForSeconds(1.5f);
-        int a = 0;
-        while (cards[a].Type == CardType.Other)
-        {
-            a++;
-        }
-
-        PutCardToWastePile(cards[a]);
-        cards.RemoveAt(a);
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            players[i].cardsPanel.UpdatePos();
-        }
-
-        setup = true;
-        CurrentPlayer.OnTurn();
-    }
 
     IEnumerator DealCardsToPlayer(Player2 p, int NoOfCard = 1, float delay = 0f)
     {
@@ -372,7 +234,7 @@ public class GamePlayManager : MonoBehaviour
         if (gameOver) yield break;
 
         List<int> indexes = new List<int>();
-        for(int i = 1; i < players.Count; i++)
+        for (int i = 1; i < players.Count; i++)
         {
             indexes.Add(i);
         }
@@ -520,7 +382,7 @@ public class GamePlayManager : MonoBehaviour
     public void SetupGameOver()
     {
         gameOver = true;
-        for(int i = players.Count - 1; i >= 0; i--)
+        for (int i = players.Count - 1; i >= 0; i--)
         {
             if (!players[i].isInRoom)
             {
@@ -682,15 +544,162 @@ public class GamePlayManager : MonoBehaviour
     public void StartMultiplayerGame()
     {
         menuButton.SetActive(true);
+
+        if (cardDeckTransform != null)
+            cardDeckTransform.gameObject.SetActive(true);
+        if (cardWastePile != null)
+            cardWastePile.gameObject.SetActive(true);
+
+        if (!IsHost) return;
+        
         currentPlayerIndex = Random.Range(0, players.Count);
 
         CreateDeck();
         cards.Shuffle();
-        StartCoroutine(DealCards(3));
+
+        int cardsPerPlayer = 3;
+        int playerCount = players.Count;
+        SerializableCard[] allCards = new SerializableCard[playerCount * cardsPerPlayer];
+        for (int playerIdx = 0; playerIdx < playerCount; playerIdx++)
+            for (int cardSlot = 0; cardSlot < cardsPerPlayer; cardSlot++)
+            {
+                allCards[playerIdx * cardsPerPlayer + cardSlot] = new SerializableCard(cards[0].Type, cards[0].Value);
+                cards.RemoveAt(0);
+            }
+        GiveAllHandsClientRpc(allCards, cardsPerPlayer, playerCount);
+
+        cards.RemoveRange(0, cardsPerPlayer * players.Count);
+        SerializableCard[] deckCards = new SerializableCard[cards.Count];
+        for (int i = 0; i < cards.Count; i++)
+            deckCards[i] = new SerializableCard(cards[i].Type, cards[i].Value);
+
+        UpdateDeckVisualClientRpc(deckCards);
+
+        int a = 0;
+        while (cards[a].Type == CardType.Other) a++;
+        var waste = new SerializableCard(cards[a].Type, cards[a].Value);
+        SetWastePileClientRpc(waste);
+    }
+
+    [ClientRpc]
+    void GiveAllHandsClientRpc(SerializableCard[] allCards, int cardsPerPlayer, int playerCount)
+    {
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int myGlobalSeat = 0;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == myClientId)
+                myGlobalSeat = i;
+
+        for (int localSeat = 0; localSeat < playerCount; localSeat++)
+        {
+            int globalSeat = (myGlobalSeat + localSeat) % playerCount;
+
+            var player = players[localSeat];
+            ClearHandPanel(player.cardsPanel.transform);
+            player.cardsPanel.cards.Clear();
+
+            for (int cardSlot = 0; cardSlot < cardsPerPlayer; cardSlot++)
+            {
+                int idx = globalSeat * cardsPerPlayer + cardSlot;
+                var sc = allCards[idx];
+
+                var card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, player.cardsPanel.transform);
+                card.Type = sc.Type;
+                card.Value = sc.Value;
+                card.IsOpen = (localSeat == 0);
+                card.CalcPoint();
+                card.name = $"{sc.Type}_{sc.Value}";
+                player.AddCard(card);
+
+                card.transform.SetSiblingIndex(cardSlot);
+
+                card.localSeat = localSeat;
+                card.cardIndex = cardSlot;
+                card.IsClickable = true;
+                card.onClick = OnAnyCardClicked;
+            }
+
+            player.cardsPanel.UpdatePos();
+        }
+    }
+
+
+    public void OnAnyCardClicked(Card card)
+    {
+        // FOR DEBUG
+        card.IsOpen = true;
+
+    }
+
+    [ClientRpc]
+    void SetWastePileClientRpc(SerializableCard wasteCard)
+    {
+        var card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity);
+        card.Type = wasteCard.Type;
+        card.Value = wasteCard.Value;
+        card.IsOpen = true;
+        card.CalcPoint();
+        card.name = wasteCard.Type.ToString() + "_" + wasteCard.Value.ToString();
+
+
+        card.transform.position = cardWastePile.transform.position;
+        card.SetTargetPosAndRot(new Vector3(Random.Range(-15f, 15f), Random.Range(-15f, 15f), 1), card.transform.localRotation.eulerAngles.z + Random.Range(-15f, 15f));
+    }
+
+    void ClearHandPanel(Transform panel)
+    {
+        for (int i = panel.childCount - 1; i >= 0; i--)
+            GameObject.Destroy(panel.GetChild(i).gameObject);
+    }
+
+    [ClientRpc]
+    void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
+    {
+        foreach (Transform t in cardDeckTransform)
+            Destroy(t.gameObject);
+
+        for (int i = 0; i < deckCards.Length; i++)
+        {
+            var sc = deckCards[i];
+            var card = Instantiate(_cardPrefab, cardDeckTransform);
+            card.IsOpen = false;
+            card.Type = sc.Type;
+            card.Value = sc.Value;
+            card.CalcPoint();
+            card.name = $"{sc.Type}_{sc.Value}";
+            card.GetComponent<Button>()?.gameObject.SetActive(false);
+
+            card.transform.localPosition += new Vector3(
+                Random.Range(-2f, 2f),
+                0,
+                -i * 0.75f
+            );
+        }
+    }
+
+
+
+
+
+}
+
+[System.Serializable]
+public struct SerializableCard : INetworkSerializable
+{
+    public CardType Type;
+    public CardValue Value;
+    public SerializableCard(CardType t, CardValue v) { Type = t; Value = v; }
+
+    public void NetworkSerialize<T>(Unity.Netcode.BufferSerializer<T> serializer) where T : Unity.Netcode.IReaderWriter
+    {
+        serializer.SerializeValue(ref Type);
+        serializer.SerializeValue(ref Value);
     }
 
 
 }
+
 
 [System.Serializable]
 public class AvatarProfile

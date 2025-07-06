@@ -13,6 +13,8 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public bool _isClickable;
     public CardType _type;
     public CardValue _value;
+    [HideInInspector] public int localSeat;
+    [HideInInspector] public int cardIndex;
 
     [Space(20)]
     public Text label1;
@@ -137,13 +139,15 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
     }
 
+
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (IsOpen && IsClickable && onClick != null)
+        if (IsClickable && onClick != null)
         {
             onClick.Invoke(this);
         }
     }
+
     public bool IsAllowCard()
     {
         return Type == GamePlayManager.instance.CurrentType ||

@@ -37,7 +37,7 @@ public class CardGameScene : MonoBehaviour
         }
         else
         {
-            GamePlayManager.instance.SetupGame();
+            // GamePlayManager.instance.SetupGame();
         }
 
     }

@@ -5592,6 +5592,7 @@ GameObject:
   m_Component:
   - component: {fileID: 144639351}
   - component: {fileID: 144639353}
+  - component: {fileID: 144639355}
   - component: {fileID: 144639354}
   m_Layer: 5
   m_Name: GamePlay
@@ -5692,6 +5693,27 @@ MonoBehaviour:
   screenCanvas: {fileID: 1220166718}
   _currentType: 0
   _currentValue: 0
+--- !u!114 &144639355
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 144639350}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 3860244261
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
 --- !u!1 &144855318
 GameObject:
   m_ObjectHideFlags: 0
@@ -6951,7 +6973,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 50
+  maxSpace: 100
   cardSize: {x: 105, y: 152}
   cards: []
 --- !u!1 &347301865
@@ -8314,7 +8336,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &508633654
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8867,7 +8889,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 50
+  maxSpace: 100
   cardSize: {x: 105, y: 152}
   cards: []
 --- !u!1 &592944212
@@ -8993,7 +9015,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 70
+  maxSpace: 100
   cardSize: {x: 105, y: 152}
   cards: []
 --- !u!1 &606788404
@@ -13355,7 +13377,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 50
+  maxSpace: 100
   cardSize: {x: 105, y: 152}
   cards: []
 --- !u!224 &1219474177 stripped
@@ -25920,7 +25942,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1720348326
 RectTransform:
   m_ObjectHideFlags: 0
