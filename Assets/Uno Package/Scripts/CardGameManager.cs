@@ -15,10 +15,22 @@ public class CardGameManager : MonoBehaviour
 
     private static bool initialized = false;
 
-    void Start()
+    void Awake()
     {
         audioSource = GetComponent<AudioSource>();
         _buttonClip = buttonClip;
+    }
+
+    void OnDestroy()
+    {
+        if (audioSource == GetComponent<AudioSource>())
+            audioSource = null;
+    }
+
+    void OnEnable()
+    {
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
     }
 
     public static void InitializeProfile()
@@ -88,9 +100,14 @@ public class CardGameManager : MonoBehaviour
 
     public static void PlaySound(AudioClip clip)
     {
-        if (clip != null && IsSound)
-            audioSource.PlayOneShot(clip);
+        if (clip == null || !IsSound || audioSource == null)
+        {
+            Debug.LogWarning("PlaySound: missing AudioClip or AudioSource!");
+            return;
+        }
+        audioSource.PlayOneShot(clip);
     }
+
 
     public static void PlayButton()
     {
@@ -149,6 +166,8 @@ public static class ExtantionMethods
             inputList[index] = temp;
         }
     }
+
+    
 }
 public enum GameMode
 {

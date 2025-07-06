@@ -23,7 +23,7 @@ public class GamePlayManager : NetworkBehaviour
     [Range(0, 100)]
     public int LowercaseNameProbability = 30;
 
-    public float cardDealTime = 0.05f;
+    public float cardDealTime = 3f;
     public Card _cardPrefab;
     public Transform cardDeckTransform;
     public Image cardWastePile;
@@ -116,6 +116,64 @@ public class GamePlayManager : NetworkBehaviour
 
 
         return temp;
+    }
+
+    [ClientRpc]
+    void DealCardsClientRpc(SerializableCard[] allCardsFlat, int cardsPerPlayer, int playerCount)
+    {
+        // Determine my global seat index
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int myGlobalSeat = 0;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == myClientId)
+                myGlobalSeat = i;
+
+        // Unflatten to per-hand but remap order to local player list
+        List<List<SerializableCard>> allCards = new List<List<SerializableCard>>();
+        for (int localSeat = 0; localSeat < playerCount; localSeat++)
+        {
+            int globalSeat = (myGlobalSeat + localSeat) % playerCount;
+            var hand = new List<SerializableCard>();
+            for (int c = 0; c < cardsPerPlayer; c++)
+                hand.Add(allCardsFlat[globalSeat * cardsPerPlayer + c]);
+            allCards.Add(hand);
+        }
+        StartCoroutine(DealCardsAnimated(allCards, cardsPerPlayer, playerCount));
+    }
+
+
+    IEnumerator DealCardsAnimated(List<List<SerializableCard>> allCards, int cardsPerPlayer, int playerCount)
+    {
+        for (int cardSlot = 0; cardSlot < cardsPerPlayer; cardSlot++)
+        {
+            for (int seat = 0; seat < playerCount; seat++)
+            {
+                var player = players[seat];
+                var sc = allCards[seat][cardSlot];
+                var card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, player.cardsPanel.transform);
+                card.Type = sc.Type;
+                card.Value = sc.Value;
+                card.IsOpen = (seat == 0);
+                card.CalcPoint();
+                card.name = $"{sc.Type}_{sc.Value}";
+                player.AddCard(card);
+                card.transform.SetSiblingIndex(cardSlot);
+                card.localSeat = seat;
+                card.cardIndex = cardSlot;
+                card.IsClickable = true;
+                card.onClick = OnAnyCardClicked;
+
+                CardGameManager.PlaySound(throw_card_clip);
+            }
+            yield return new WaitForSeconds(cardDealTime);
+        }
+
+        for (int seat = 0; seat < playerCount; seat++)
+        {
+            players[seat].cardsPanel.UpdatePos();
+        }
+        Canvas.ForceUpdateCanvases();
     }
 
 
@@ -566,7 +624,7 @@ public class GamePlayManager : NetworkBehaviour
                 allCards[playerIdx * cardsPerPlayer + cardSlot] = new SerializableCard(cards[0].Type, cards[0].Value);
                 cards.RemoveAt(0);
             }
-        GiveAllHandsClientRpc(allCards, cardsPerPlayer, playerCount);
+        DealCardsClientRpc(allCards, cardsPerPlayer, playerCount);
 
         cards.RemoveRange(0, cardsPerPlayer * players.Count);
         SerializableCard[] deckCards = new SerializableCard[cards.Count];
@@ -635,7 +693,8 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void SetWastePileClientRpc(SerializableCard wasteCard)
     {
-        var card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity);
+        var card = Instantiate(_cardPrefab, cardWastePile.transform);
+        card.transform.localPosition = Vector3.zero;
         card.Type = wasteCard.Type;
         card.Value = wasteCard.Value;
         card.IsOpen = true;

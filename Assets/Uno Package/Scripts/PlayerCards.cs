@@ -49,10 +49,7 @@ public class PlayerCards : MonoBehaviour
 
     public void UpdatePos(float delay = 0f)
     {
-#if UNITY_EDITOR
-        if (!UnityEditor.EditorApplication.isPlaying)
             cards = new List<Card>(GetComponentsInChildren<Card>());
-#endif
         // if (cards.Count > 0 && cards[0].IsOpen)
         //     cards.Sort((x, y) => y.Type.CompareTo(x.Type));
 
@@ -78,14 +75,9 @@ public class PlayerCards : MonoBehaviour
             item.anchorMin = Vector2.one * .5f;
             item.pivot = Vector2.one * .5f;
             item.sizeDelta = cardSize;
-#if UNITY_EDITOR
-            if (!UnityEditor.EditorApplication.isPlaying)
-                cards[i].transform.localPosition = new Vector3(start, 0f, 0f);
-            else
-                cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
-#else
-        cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
-#endif
+
+            cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
+
             start += space;
         }
     }
