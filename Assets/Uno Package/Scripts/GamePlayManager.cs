@@ -33,6 +33,8 @@ public class GamePlayManager : NetworkBehaviour
     public Animator cardEffectAnimator;
     public ParticleSystem wildCardParticle;
     public GameObject menuButton;
+    public int previousPlayerIndex = -1;
+    private Coroutine turnTimeoutCoroutine;
 
     [Header("Player Setting")]
     public List<Player2> players;
@@ -81,6 +83,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         instance = this;
         Input.multiTouchEnabled = false;
+        previousPlayerIndex = -1;
     }
 
 
@@ -162,7 +165,7 @@ public class GamePlayManager : NetworkBehaviour
                 card.localSeat = seat;
                 card.cardIndex = cardSlot;
                 card.IsClickable = true;
-                card.onClick = OnAnyCardClicked;
+                card.onClick = null;
 
                 CardGameManager.PlaySound(throw_card_clip);
             }
@@ -173,9 +176,142 @@ public class GamePlayManager : NetworkBehaviour
         {
             players[seat].cardsPanel.UpdatePos();
         }
-        Canvas.ForceUpdateCanvases();
+
+        StartCoroutine(StartPeekingPhase());
+
+
+
     }
 
+    private IEnumerator StartPeekingPhase()
+    {
+        float peekTime = 3f;
+        int localPlayerIndex = 0;
+        var myCards = players[localPlayerIndex].cardsPanel.cards;
+        players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
+
+        for (int i = 0; i < myCards.Count; i++)
+        {
+            var card = myCards[i];
+            bool canPeek = (i == 0 || i == 2);
+            card.IsClickable = canPeek;
+            card.PeekMode = canPeek;
+            card.IsOpen = false;
+            card.onClick = null;
+
+            if (canPeek)
+            {
+                card.onClick = (c) =>
+                {
+                    if (c.PeekMode && c.IsClickable)
+                    {
+                        c.IsOpen = true;
+                    }
+                };
+            }
+        }
+
+        for (int pi = 1; pi < players.Count; pi++)
+        {
+            foreach (var card in players[pi].cardsPanel.cards)
+            {
+                card.IsClickable = false;
+                card.PeekMode = false;
+                card.onClick = null;
+            }
+        }
+
+        yield return new WaitForSeconds(peekTime);
+
+        for (int i = 0; i < myCards.Count; i++)
+        {
+            var card = myCards[i];
+            card.IsOpen = false;
+            card.IsClickable = false;
+            card.PeekMode = false;
+            card.onClick = null;
+        }
+
+        if (IsHost)
+        {
+            currentPlayerIndex = 0;
+            StartPlayerTurnForAllClientRpc(currentPlayerIndex);
+        }
+
+    }
+
+
+    [ClientRpc]
+    void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
+    {
+        arrowObject.SetActive(false);
+
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+
+        if (previousPlayerIndex >= 0 && previousPlayerIndex < players.Count)
+            players[previousPlayerIndex].OnTurnEnd();
+
+        currentPlayerIndex = localIndex;
+        CurrentPlayer.OnTurn();
+        previousPlayerIndex = currentPlayerIndex;
+
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int myGlobalIndex = -1;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == myClientId)
+                myGlobalIndex = i;
+
+        if (myGlobalIndex == globalPlayerIndex && players[0].isUserPlayer)
+        {
+            EnableDeckClick();
+        }
+        else
+        {
+            arrowObject.SetActive(false);
+        }
+
+        if (IsHost)
+        {
+            if (turnTimeoutCoroutine != null)
+            {
+                StopCoroutine(turnTimeoutCoroutine);
+                turnTimeoutCoroutine = null;
+            }
+            turnTimeoutCoroutine = StartCoroutine(HostTurnTimeoutRoutine());
+        }
+    }
+
+
+
+    private IEnumerator HostTurnTimeoutRoutine()
+    {
+        yield return new WaitForSeconds(6f);
+
+        if (IsHost)
+        {
+            Debug.Log($"Player {currentPlayerIndex} turn timed out. Passing turn...");
+            players[currentPlayerIndex].OnTurnEnd();
+            NextPlayerTurn();
+        }
+    }
+
+
+
+    int GetLocalIndexFromGlobal(int globalIndex)
+    {
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int myGlobalSeat = 0;
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == myClientId)
+                myGlobalSeat = i;
+        int playerCount = playerList.Count;
+        for (int localIndex = 0; localIndex < playerCount; localIndex++)
+            if ((myGlobalSeat + localIndex) % playerCount == globalIndex)
+                return localIndex;
+        return 0;
+    }
 
 
     IEnumerator DealCardsToPlayer(Player2 p, int NoOfCard = 1, float delay = 0f)
@@ -343,8 +479,21 @@ public class GamePlayManager : NetworkBehaviour
 
     public void NextPlayerTurn()
     {
+        if (!IsHost) return;
         NextPlayerIndex();
-        CurrentPlayer.OnTurn();
+        StartPlayerTurnForAllClientRpc(GetGlobalIndexFromLocal(currentPlayerIndex));
+    }
+
+    int GetGlobalIndexFromLocal(int localIndex)
+    {
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int myGlobalSeat = 0;
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == myClientId)
+                myGlobalSeat = i;
+        int playerCount = playerList.Count;
+        return (myGlobalSeat + localIndex) % playerCount;
     }
 
     public void OnColorSelect(int i)
@@ -637,57 +786,6 @@ public class GamePlayManager : NetworkBehaviour
         while (cards[a].Type == CardType.Other) a++;
         var waste = new SerializableCard(cards[a].Type, cards[a].Value);
         SetWastePileClientRpc(waste);
-    }
-
-    [ClientRpc]
-    void GiveAllHandsClientRpc(SerializableCard[] allCards, int cardsPerPlayer, int playerCount)
-    {
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalSeat = 0;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalSeat = i;
-
-        for (int localSeat = 0; localSeat < playerCount; localSeat++)
-        {
-            int globalSeat = (myGlobalSeat + localSeat) % playerCount;
-
-            var player = players[localSeat];
-            ClearHandPanel(player.cardsPanel.transform);
-            player.cardsPanel.cards.Clear();
-
-            for (int cardSlot = 0; cardSlot < cardsPerPlayer; cardSlot++)
-            {
-                int idx = globalSeat * cardsPerPlayer + cardSlot;
-                var sc = allCards[idx];
-
-                var card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, player.cardsPanel.transform);
-                card.Type = sc.Type;
-                card.Value = sc.Value;
-                card.IsOpen = (localSeat == 0);
-                card.CalcPoint();
-                card.name = $"{sc.Type}_{sc.Value}";
-                player.AddCard(card);
-
-                card.transform.SetSiblingIndex(cardSlot);
-
-                card.localSeat = localSeat;
-                card.cardIndex = cardSlot;
-                card.IsClickable = true;
-                card.onClick = OnAnyCardClicked;
-            }
-
-            player.cardsPanel.UpdatePos();
-        }
-    }
-
-
-    public void OnAnyCardClicked(Card card)
-    {
-        // FOR DEBUG
-        card.IsOpen = true;
-
     }
 
     [ClientRpc]

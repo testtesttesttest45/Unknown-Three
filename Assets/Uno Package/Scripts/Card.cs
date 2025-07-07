@@ -15,6 +15,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public CardValue _value;
     [HideInInspector] public int localSeat;
     [HideInInspector] public int cardIndex;
+    public bool PeekMode = false;
 
     [Space(20)]
     public Text label1;

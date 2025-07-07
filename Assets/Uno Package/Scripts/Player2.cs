@@ -16,7 +16,8 @@ public class Player2 : MonoBehaviour
     public Image timerImage;
     public GameObject timerOjbect;
 
-    private float totalTimer = 15f;
+    public float turnTimerDuration = 6f;
+    private float totalTimer;
 
     [HideInInspector]
     public bool pickFromDeck, unoClicked, choosingColor;
@@ -94,6 +95,7 @@ public class Player2 : MonoBehaviour
     {
         unoClicked = false;
         pickFromDeck = false;
+        totalTimer = turnTimerDuration;
         Timer = true;
 
         if (isUserPlayer)
@@ -173,8 +175,9 @@ public class Player2 : MonoBehaviour
         }
     }
 
-    public void ShowMessage(string message, bool playStarParticle = false)
+    public void ShowMessage(string message, bool playStarParticle = false, float duration = 1.5f)
     {
+        StopCoroutine("MessageHideRoutine");
         messageLbl.text = message;
         messageLbl.GetComponent<Animator>().SetTrigger("show");
         if (playStarParticle)
@@ -182,7 +185,15 @@ public class Player2 : MonoBehaviour
             starParticleSystem.gameObject.SetActive(true);
             starParticleSystem.Emit(30);
         }
+        StartCoroutine(MessageHideRoutine(duration));
     }
+
+    private IEnumerator MessageHideRoutine(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        messageLbl.GetComponent<Animator>().SetTrigger("hide");
+    }
+
 
     public IEnumerator DoComputerTurn()
     {
