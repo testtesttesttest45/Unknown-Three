@@ -58,6 +58,7 @@ public class GamePlayManager : NetworkBehaviour
 
     private Card peekedCard = null;
     private bool hasPeekedCard = false;
+    private Dictionary<ulong, SerializableCard> peekedCardsByClientId = new Dictionary<ulong, SerializableCard>();
 
     public CardType CurrentType
     {
@@ -174,6 +175,17 @@ public class GamePlayManager : NetworkBehaviour
         var myCards = players[localPlayerIndex].cardsPanel.cards;
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
 
+        arrowObject.SetActive(false);
+        for (int i = 0; i < cardDeckTransform.childCount; i++)
+        {
+            var card = cardDeckTransform.GetChild(i).GetComponent<Card>();
+            if (card != null)
+            {
+                card.IsClickable = false;
+                card.onClick = null;
+            }
+        }
+
         for (int i = 0; i < myCards.Count; i++)
         {
             var card = myCards[i];
@@ -221,8 +233,8 @@ public class GamePlayManager : NetworkBehaviour
             currentPlayerIndex = 0;
             StartPlayerTurnForAllClientRpc(currentPlayerIndex);
         }
-
     }
+
 
     [ClientRpc]
     void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
@@ -270,31 +282,30 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+
     private IEnumerator HostTurnTimeoutRoutine()
     {
         yield return new WaitForSeconds(6f);
 
-        if (IsHost)
+        if (!IsHost) yield break;
+
+        ulong currentPlayerClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
+
+        if (peekedCardsByClientId.TryGetValue(currentPlayerClientId, out var peekedCard))
         {
-            Debug.Log($"Player {currentPlayerIndex} turn timed out. Passing turn...");
-
-            if (hasPeekedCard && peekedCard != null)
-            {
-                int cardType = (int)peekedCard.Type;
-                int cardValue = (int)peekedCard.Value;
-
-                DiscardPeekedCardServerRpc(cardType, cardValue);
-
-                peekedCard = null;
-                hasPeekedCard = false;
-            }
-            else
-            {
-                players[currentPlayerIndex].OnTurnEnd();
-                NextPlayerTurn();
-            }
+            // Player clicked deck but didn’t discard — auto discard it
+            DiscardPeekedCardServerRpc((int)peekedCard.Type, (int)peekedCard.Value);
+            peekedCardsByClientId.Remove(currentPlayerClientId);
+        }
+        else
+        {
+            // Player did nothing — just end turn
+            players[currentPlayerIndex].OnTurnEnd();
+            NextPlayerTurn();
         }
     }
+
+
 
     public void OnDeckClickedByPlayer()
     {
@@ -316,7 +327,22 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.GetComponent<Button>().interactable = true;
         unoBtn.GetComponent<Button>().onClick.RemoveAllListeners();
         unoBtn.GetComponent<Button>().onClick.AddListener(OnDiscardClicked);
+
+        NotifyHostPeekedCardServerRpc((int)card.Type, (int)card.Value);
     }
+
+    [ServerRpc(RequireOwnership = false)]
+    void NotifyHostPeekedCardServerRpc(int cardType, int cardValue, ServerRpcParams rpcParams = default)
+    {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+
+        var peekedCard = new SerializableCard((CardType)cardType, (CardValue)cardValue);
+        peekedCardsByClientId[clientId] = peekedCard;
+
+        Debug.Log($"Client {clientId} peeked card: {peekedCard.Type} {peekedCard.Value}");
+    }
+
+
 
     public void UpdateDeckClickability()
     {
@@ -360,7 +386,6 @@ public class GamePlayManager : NetworkBehaviour
         int cardValue = (int)peekedCard.Value;
 
         Destroy(peekedCard.gameObject);
-
         peekedCard = null;
         hasPeekedCard = false;
 
@@ -368,6 +393,7 @@ public class GamePlayManager : NetworkBehaviour
 
         DiscardPeekedCardServerRpc(cardType, cardValue);
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     void DiscardPeekedCardServerRpc(int cardType, int cardValue, ServerRpcParams rpcParams = default)
@@ -389,9 +415,23 @@ public class GamePlayManager : NetworkBehaviour
 
         DiscardPeekedCardClientRpc(cardType, cardValue, cards.ToArray());
 
+        ForceDiscardClientRpc();
+
         players[currentPlayerIndex].OnTurnEnd();
         NextPlayerTurn();
     }
+
+    [ClientRpc]
+    void ForceDiscardClientRpc()
+    {
+        if (peekedCard != null)
+        {
+            Destroy(peekedCard.gameObject);
+            peekedCard = null;
+            hasPeekedCard = false;
+        }
+    }
+
 
 
     [ClientRpc]
