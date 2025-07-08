@@ -5405,6 +5405,7 @@ MonoBehaviour:
   starParticleSystem: {fileID: 1938185179}
   timerImage: {fileID: 1546747952}
   timerOjbect: {fileID: 1174487135}
+  turnTimerDuration: 6
   pickFromDeck: 0
   unoClicked: 0
   choosingColor: 0
@@ -5672,6 +5673,7 @@ MonoBehaviour:
   cardEffectAnimator: {fileID: 543103011}
   wildCardParticle: {fileID: 1408218706}
   menuButton: {fileID: 525378197}
+  previousPlayerIndex: -1
   players:
   - {fileID: 858389341}
   - {fileID: 517660853}
@@ -8455,6 +8457,7 @@ MonoBehaviour:
   starParticleSystem: {fileID: 1587659789}
   timerImage: {fileID: 981384451}
   timerOjbect: {fileID: 429832750}
+  turnTimerDuration: 6
   pickFromDeck: 0
   unoClicked: 0
   choosingColor: 0
@@ -10882,6 +10885,7 @@ MonoBehaviour:
   starParticleSystem: {fileID: 2020271568}
   timerImage: {fileID: 909217440}
   timerOjbect: {fileID: 1554002230}
+  turnTimerDuration: 6
   pickFromDeck: 0
   unoClicked: 0
   choosingColor: 0
@@ -11954,7 +11958,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1027432572
 RectTransform:
   m_ObjectHideFlags: 0
@@ -20008,6 +20012,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1519604161}
+  - component: {fileID: 1519604164}
+  - component: {fileID: 1519604163}
   m_Layer: 5
   m_Name: CardDeckContainer
   m_TagString: Untagged
@@ -20034,6 +20040,44 @@ RectTransform:
   m_AnchoredPosition: {x: -250, y: 30}
   m_SizeDelta: {x: 105, y: 152}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1519604163
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1519604160}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 0}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &1519604164
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1519604160}
+  m_CullTransparentMesh: 1
 --- !u!1 &1546747950
 GameObject:
   m_ObjectHideFlags: 0
@@ -26117,6 +26161,7 @@ MonoBehaviour:
   starParticleSystem: {fileID: 107769522}
   timerImage: {fileID: 1055863938}
   timerOjbect: {fileID: 1079100153}
+  turnTimerDuration: 6
   pickFromDeck: 0
   unoClicked: 0
   choosingColor: 0

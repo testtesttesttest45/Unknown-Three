@@ -98,45 +98,20 @@ public class Player2 : MonoBehaviour
         totalTimer = turnTimerDuration;
         Timer = true;
 
-        if (isUserPlayer)
-        {
-            UpdateCardColor();
-            if (cardsPanel.AllowedCard.Count == 0)
-            {
-                GamePlayManager.instance.EnableDeckClick();
-            }
-        }
-        else
-        {
-            StartCoroutine(DoComputerTurn());
-        }
+        //if (isUserPlayer)
+        //{
+        //    if (cardsPanel.AllowedCard.Count == 0)
+        //    {
+        //        GamePlayManager.instance.EnableDeckClick();
+        //    }
+        //}
+        //else
+        //{
+        //    StartCoroutine(DoComputerTurn());
+        //}
     }
 
-    public void UpdateCardColor()
-    {
-        if (isUserPlayer)
-        {
-            foreach (var item in cardsPanel.AllowedCard)
-            {
-                item.SetGaryColor(false);
-                item.IsClickable = true;
-            }
-            foreach (var item in cardsPanel.DisallowedCard)
-            {
-                item.SetGaryColor(true);
-
-                item.IsClickable = false;
-            }
-            if (cardsPanel.AllowedCard.Count > 0 && cardsPanel.cards.Count == 2)
-            {
-                GamePlayManager.instance.EnableUnoBtn();
-            }
-            else
-            {
-                GamePlayManager.instance.DisableUnoBtn();
-            }
-        }
-    }
+    
 
     public void AddCard(Card c)
     {
@@ -167,13 +142,20 @@ public class Player2 : MonoBehaviour
 
     public void OnTurnEnd()
     {
-        if (!choosingColor) Timer = false;
+        Timer = false;
         cardsPanel.UpdatePos();
-        foreach (var item in cardsPanel.cards)
+
+        foreach (var card in cardsPanel.cards)
         {
-            item.SetGaryColor(false);
+            card.IsClickable = false;
+            card.onClick = null;
+            card.SetGaryColor(false);
         }
+
+        GamePlayManager.instance.arrowObject.SetActive(false);
+        GamePlayManager.instance.unoBtn.SetActive(false);
     }
+
 
     public void ShowMessage(string message, bool playStarParticle = false, float duration = 1.5f)
     {
@@ -204,7 +186,7 @@ public class Player2 : MonoBehaviour
         else
         {
             yield return new WaitForSeconds(Random.Range(1f, totalTimer * .3f));
-            GamePlayManager.instance.EnableDeckClick();
+           //  GamePlayManager.instance.EnableDeckClick();
             GamePlayManager.instance.OnDeckClick();
 
             if (cardsPanel.AllowedCard.Count > 0)
@@ -257,17 +239,17 @@ public class Player2 : MonoBehaviour
             }
         }
 
-        if (temp == CardType.Other)
-        {
-            GamePlayManager.instance.SelectColor(Random.Range(1, 5));
-        }
-        else
-        {
-            if (Random.value < 0.7f)
-                GamePlayManager.instance.SelectColor((int)temp);
-            else
-                GamePlayManager.instance.SelectColor(Random.Range(1, 5));
-        }
+        //if (temp == CardType.Other)
+        //{
+        //    GamePlayManager.instance.SelectColor(Random.Range(1, 5));
+        //}
+        //else
+        //{
+        //    if (Random.value < 0.7f)
+        //        GamePlayManager.instance.SelectColor((int)temp);
+        //    else
+        //        GamePlayManager.instance.SelectColor(Random.Range(1, 5));
+        //}
     }
 
     public int GetTotalPoints()
