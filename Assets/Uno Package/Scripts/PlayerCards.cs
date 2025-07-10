@@ -1,7 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-[ExecuteInEditMode]
+
+
 public class PlayerCards : MonoBehaviour
 {
     public float maxSpace;
@@ -38,21 +39,12 @@ public class PlayerCards : MonoBehaviour
         cards = new List<Card>();
     }
 
-    void Update()
-    {
-#if UNITY_EDITOR
-        GetComponent<RectTransform>().anchorMax = Vector2.one * .5f;
-        GetComponent<RectTransform>().anchorMin = Vector2.one * .5f;
-        GetComponent<RectTransform>().pivot = Vector2.one * .5f;
-#endif
-    }
+
 
     public void UpdatePos(float delay = 0f)
     {
-            cards = new List<Card>(GetComponentsInChildren<Card>());
-        // if (cards.Count > 0 && cards[0].IsOpen)
-        //     cards.Sort((x, y) => y.Type.CompareTo(x.Type));
-
+        // DO NOT assign: cards = new List<Card>(GetComponentsInChildren<Card>());
+        // The cards list should already be correct
         float space = 0;
         float start = 0;
         float totalWidht = GetComponent<RectTransform>().sizeDelta.x;
@@ -75,12 +67,11 @@ public class PlayerCards : MonoBehaviour
             item.anchorMin = Vector2.one * .5f;
             item.pivot = Vector2.one * .5f;
             item.sizeDelta = cardSize;
-
             cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
-
             start += space;
         }
     }
+
 
 
     public int GetCount(CardType t)

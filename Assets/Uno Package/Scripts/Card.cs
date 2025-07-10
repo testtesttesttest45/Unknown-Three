@@ -16,6 +16,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
     [HideInInspector] public int localSeat;
     [HideInInspector] public int cardIndex;
     public bool PeekMode = false;
+    public GameObject glowOutline;
 
     [Space(20)]
     public Text label1;
@@ -77,13 +78,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
         LeanTween.rotateLocal(gameObject, new Vector3(0f, 0f, rotZ), t);
     }
 
-    void Update()
-    {
-#if UNITY_EDITOR
-        if (!UnityEditor.EditorApplication.isPlaying)
-            UpdateCard();
-#endif
-    }
 
     public void UpdateCard()
     {
@@ -172,5 +166,11 @@ public class Card : MonoBehaviour, IPointerClickHandler
             label2.color = Type.GetColor();
             label3.color = Color.white;
         }
+    }
+
+    public void ShowGlow(bool show)
+    {
+        if (glowOutline != null)
+            glowOutline.SetActive(show);
     }
 }

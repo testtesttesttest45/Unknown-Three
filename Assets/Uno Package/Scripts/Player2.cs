@@ -74,22 +74,23 @@ public class Player2 : MonoBehaviour
                 {
                     GamePlayManager.instance.colorChoose.HidePopup();
                 }
-                ChooseBestColor();
+                // ChooseBestColor();
             }
             else if (GamePlayManager.instance.IsDeckArrow)
             {
                 GamePlayManager.instance.OnDeckClick();
             }
-            else if (cardsPanel.AllowedCard.Count > 0)
-            {
-                OnCardClick(FindBestPutCard());
-            }
+            //else if (cardsPanel.AllowedCard.Count > 0)
+            //{
+            //    OnCardClick(FindBestPutCard());
+            //}
             else
             {
                 OnTurnEnd();
             }
         }
     }
+
 
     public void OnTurn()
     {
@@ -111,12 +112,24 @@ public class Player2 : MonoBehaviour
         //}
     }
 
-    
+
 
     public void AddCard(Card c)
     {
-        cardsPanel.cards.Add(c);
         c.transform.SetParent(cardsPanel.transform);
+        cardsPanel.cards.Add(c);
+        if (isUserPlayer)
+        {
+            c.onClick = OnCardClick;
+            c.IsClickable = false;
+        }
+    }
+
+    public void AddCard(Card c, int insertIndex)
+    {
+        c.transform.SetParent(cardsPanel.transform);
+        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
+        cardsPanel.cards.Insert(insertIndex, c);
         if (isUserPlayer)
         {
             c.onClick = OnCardClick;
@@ -129,7 +142,10 @@ public class Player2 : MonoBehaviour
         cardsPanel.cards.Remove(c);
         c.onClick = null;
         c.IsClickable = false;
+        Destroy(c.gameObject);
     }
+
+
 
     public void OnCardClick(Card c)
     {
@@ -252,6 +268,11 @@ public class Player2 : MonoBehaviour
         //}
     }
 
+    Vector3 GetHandSlotWorldPos(Player2 p, int handIndex)
+    {
+        return p.cardsPanel.cards[handIndex].transform.position;
+    }
+
     public int GetTotalPoints()
     {
         int total = 0;
@@ -261,4 +282,28 @@ public class Player2 : MonoBehaviour
         }
         return total;
     }
+
+    public void AddSerializableCard(SerializableCard sc, int insertIndex)
+    {
+        Card card = GameObject.Instantiate(GamePlayManager.instance._cardPrefab, cardsPanel.transform);
+        card.Type = sc.Type;
+        card.Value = sc.Value;
+        card.IsOpen = false;
+        card.CalcPoint();
+        card.name = $"{sc.Type}_{sc.Value}";
+
+        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
+        cardsPanel.cards.Insert(insertIndex, card);
+
+        if (isUserPlayer)
+        {
+            card.onClick = OnCardClick;
+            card.IsClickable = false;
+        }
+
+        cardsPanel.UpdatePos();
+    }
+
+
+
 }
