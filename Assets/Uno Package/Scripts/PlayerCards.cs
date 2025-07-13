@@ -8,31 +8,7 @@ public class PlayerCards : MonoBehaviour
     public float maxSpace;
     public Vector2 cardSize;
     public List<Card> cards;
-    public List<Card> AllowedCard
-    {
-        get
-        {
-            List<Card> e = cards.FindAll(
-                (obj) =>
-                {
-                    return obj.IsAllowCard();
-                });
-            return e;
-        }
-    }
-
-    public List<Card> DisallowedCard
-    {
-        get
-        {
-            List<Card> e = cards.FindAll(
-                (obj) =>
-                {
-                    return !obj.IsAllowCard();
-                });
-            return e;
-        }
-    }
+    
 
     void Awake()
     {

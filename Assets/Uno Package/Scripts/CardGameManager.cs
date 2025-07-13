@@ -176,16 +176,13 @@ public enum GameMode
 }
 public enum CardType
 {
-    Other,
-    Red,
-    Yellow,
-    Green,
-    Blue
+    Red,    // 0 → Number_1
+    Yellow, // 1 → Number_2
+    Green,  // 2 → Number_3
+    Blue    // 3 → Number_4
 }
+
 public enum CardValue
 {
-    Zero,
-    One, Two, Three, Four, Five, Six, Seven, Eight, Nine,
-    Skip, Reverse, DrawTwo,
-    Wild, DrawFour
+    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King
 }

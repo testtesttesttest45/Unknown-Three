@@ -165,7 +165,7 @@ public class Player2 : MonoBehaviour
         {
             card.IsClickable = false;
             card.onClick = null;
-            card.SetGaryColor(false);
+            // card.SetGaryColor(false);
         }
 
         GamePlayManager.instance.arrowObject.SetActive(false);
@@ -190,87 +190,6 @@ public class Player2 : MonoBehaviour
     {
         yield return new WaitForSeconds(duration);
         messageLbl.GetComponent<Animator>().SetTrigger("hide");
-    }
-
-
-    public IEnumerator DoComputerTurn()
-    {
-        if (cardsPanel.AllowedCard.Count > 0)
-        {
-            StartCoroutine(ComputerTurnHasCard(0.25f));
-        }
-        else
-        {
-            yield return new WaitForSeconds(Random.Range(1f, totalTimer * .3f));
-           //  GamePlayManager.instance.EnableDeckClick();
-            GamePlayManager.instance.OnDeckClick();
-
-            if (cardsPanel.AllowedCard.Count > 0)
-            {
-                StartCoroutine(ComputerTurnHasCard(0.2f));
-            }
-        }
-    }
-
-    private IEnumerator ComputerTurnHasCard(float unoCoef)
-    {
-        bool unoClick = false;
-        float unoPossibality = GamePlayManager.instance.UnoProbability / 100f;
-
-        if (Random.value < unoPossibality && cardsPanel.cards.Count == 2)
-        {
-            yield return new WaitForSeconds(Random.Range(1f, totalTimer * unoCoef));
-            GamePlayManager.instance.OnUnoClick();
-            unoClick = true;
-        }
-
-        yield return new WaitForSeconds(Random.Range(1f, totalTimer * (unoClick ? unoCoef : unoCoef * 2)));
-        OnCardClick(FindBestPutCard());
-    }
-
-    public Card FindBestPutCard()
-    {
-        List<Card> allow = cardsPanel.AllowedCard;
-        allow.Sort((x, y) => y.Type.CompareTo(x.Type));
-        return allow[0];
-    }
-
-    public void ChooseBestColor()
-    {
-        CardType temp = CardType.Other;
-        if (cardsPanel.cards.Count == 1)
-        {
-            temp = cardsPanel.cards[0].Type;
-        }
-        else
-        {
-            int max = 1;
-            for (int i = 0; i < 5; i++)
-            {
-                if (cardsPanel.GetCount((CardType)i) > max)
-                {
-                    max = cardsPanel.GetCount((CardType)i);
-                    temp = (CardType)i;
-                }
-            }
-        }
-
-        //if (temp == CardType.Other)
-        //{
-        //    GamePlayManager.instance.SelectColor(Random.Range(1, 5));
-        //}
-        //else
-        //{
-        //    if (Random.value < 0.7f)
-        //        GamePlayManager.instance.SelectColor((int)temp);
-        //    else
-        //        GamePlayManager.instance.SelectColor(Random.Range(1, 5));
-        //}
-    }
-
-    Vector3 GetHandSlotWorldPos(Player2 p, int handIndex)
-    {
-        return p.cardsPanel.cards[handIndex].transform.position;
     }
 
     public int GetTotalPoints()

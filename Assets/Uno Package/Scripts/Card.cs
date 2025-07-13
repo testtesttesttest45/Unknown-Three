@@ -82,49 +82,45 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public void UpdateCard()
     {
         string txt = "";
-        string sprite = "Cards/BlankCard";
+        string spritePath = "Cards/BlankCard";
         if (IsOpen)
         {
-            if (Type == CardType.Other)
+            int value = (int)Value;
+            spritePath = "Cards/Number_" + ((int)Type + 1);
+            if (value == 6 || value == 9) spritePath += "_Underline";
+
+            if (value <= 10)
             {
-                if (Value == CardValue.DrawFour)
-                    sprite = "Cards/DrawFour";
-                else if (Value == CardValue.Wild)
-                    sprite = "Cards/Wild";
+                txt = value.ToString();
             }
             else
             {
-                int value = (int)Value;
-                if (value <= 9)
-                {
-                    sprite = "Cards/Number_" + (int)Type;
-                    if (value == 6 || value == 9) sprite += "_Underline";
-                    txt = value + "";
-                }
-                else
-                {
-                    sprite = "Cards/" + Value.ToString() + "_" + (int)Type;
-                    if (Value == CardValue.DrawTwo)
-                        txt = "+2";
-                }
+                if (Value == CardValue.Jack) txt = "J";
+                else if (Value == CardValue.Queen) txt = "Q";
+                else if (Value == CardValue.King) txt = "K";
+                else txt = Value.ToString();
             }
         }
 
-        GetComponent<Image>().sprite = Resources.Load<Sprite>(sprite);
+        Sprite loadedSprite = Resources.Load<Sprite>(spritePath);
+        if (loadedSprite == null)
+            loadedSprite = Resources.Load<Sprite>("Cards/BlankCard");
+        GetComponent<Image>().sprite = loadedSprite;
+
+        label1.color = Color.white;
         label2.color = Type.GetColor();
+        label3.color = Color.white;
 
         label1.text = txt;
-        label2.text = (Value == CardValue.DrawTwo) ? "" : txt;
+        label2.text = txt;
         label3.text = txt;
     }
 
+
+
     public void CalcPoint()
     {
-        if (Type == CardType.Other)
-        {
-            point = 40;
-        }
-        else if (Value == CardValue.Reverse || Value == CardValue.DrawTwo || Value == CardValue.Skip)
+        if (Value == CardValue.King || Value == CardValue.Queen || Value == CardValue.Jack)
         {
             point = 20;
         }
@@ -143,30 +139,13 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
     }
 
-    public bool IsAllowCard()
-    {
-        return Type == GamePlayManager.instance.CurrentType ||
-            Value == GamePlayManager.instance.CurrentValue ||
-            Type == CardType.Other;
-    }
+    //public bool IsAllowCard()
+    //{
+    //    return Type == GamePlayManager.instance.CurrentType ||
+    //        Value == GamePlayManager.instance.CurrentValue ||
+    //        Type == CardType.Other;
+    //}
 
-    public void SetGaryColor(bool b)
-    {
-        if (b && IsOpen)
-        {
-            GetComponent<Image>().color = Color.gray;
-            label1.color = Color.gray;
-            label2.color = Type.GetGrayColor();
-            label3.color = Color.gray;
-        }
-        else
-        {
-            GetComponent<Image>().color = Color.white;
-            label1.color = Color.white;
-            label2.color = Type.GetColor();
-            label3.color = Color.white;
-        }
-    }
 
     public void ShowGlow(bool show)
     {

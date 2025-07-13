@@ -126,11 +126,11 @@ public class GamePlayManager : NetworkBehaviour
 
         UpdateDeckVisualClientRpc(cards.ToArray());
 
-        int a = cards.FindIndex(c => c.Type != CardType.Other);
-        var waste = cards[a];
-        cards.RemoveAt(a);
-        wasteCards.Add(waste);
-        SetWastePileClientRpc(waste);
+        //int a = cards.FindIndex(c => c.Type != CardType.Other);
+        //var waste = cards[a];
+        //cards.RemoveAt(a);
+        //wasteCards.Add(waste);
+        //SetWastePileClientRpc(waste);
     }
 
     public void SetupNetworkedPlayerSeats()
@@ -164,35 +164,44 @@ public class GamePlayManager : NetworkBehaviour
     {
         cards = new List<SerializableCard>();
         wasteCards = new List<SerializableCard>();
-        for (int j = 1; j <= 4; j++)
+
+        List<CardValue> values = new List<CardValue>
+    {
+        CardValue.Zero,
+        CardValue.One,
+        CardValue.Two,
+        CardValue.Three,
+        CardValue.Four,
+        CardValue.Five,
+        CardValue.Six,
+        CardValue.Seven,
+        CardValue.Eight,
+        CardValue.Nine,
+        CardValue.Ten,
+        CardValue.Jack,
+        CardValue.Queen,
+        CardValue.King
+    };
+
+        for (int j = 0; j < 4; j++)
         {
-            cards.Add(new SerializableCard(CardType.Other, CardValue.Wild));
-            cards.Add(new SerializableCard(CardType.Other, CardValue.DrawFour));
-        }
-        for (int i = 0; i <= 4; i++)
-        {
-            for (int j = 1; j <= 4; j++)
+            foreach (var val in values)
             {
-                cards.Add(new SerializableCard((CardType)j, (CardValue)i));
-                cards.Add(new SerializableCard((CardType)j, (CardValue)i));
+                cards.Add(new SerializableCard((CardType)j, val));
             }
         }
+
     }
+
 
     [ClientRpc]
     void DealCardsClientRpc(SerializableCard[] allCardsFlat, int cardsPerPlayer, int playerCount)
     {
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalSeat = 0;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalSeat = i;
-
         List<List<SerializableCard>> allCards = new List<List<SerializableCard>>();
-        for (int localSeat = 0; localSeat < playerCount; localSeat++)
+
+        // use global seat order, do not shift for local!
+        for (int globalSeat = 0; globalSeat < playerCount; globalSeat++)
         {
-            int globalSeat = (myGlobalSeat + localSeat) % playerCount;
             var hand = new List<SerializableCard>();
             for (int c = 0; c < cardsPerPlayer; c++)
                 hand.Add(allCardsFlat[globalSeat * cardsPerPlayer + c]);
@@ -200,6 +209,7 @@ public class GamePlayManager : NetworkBehaviour
         }
         StartCoroutine(DealCardsAnimated(allCards, cardsPerPlayer, playerCount));
     }
+
 
     IEnumerator DealCardsAnimated(List<List<SerializableCard>> allCards, int cardsPerPlayer, int playerCount)
     {
@@ -915,9 +925,6 @@ public class GamePlayManager : NetworkBehaviour
             c.ShowGlow(false);
             p.RemoveCard(c);
             if (p.cardsPanel.cards.Count == 1 && !p.unoClicked)
-            {
-                ApplyUnoCharge(CurrentPlayer);
-            }
             CardGameManager.PlaySound(draw_card_clip);
         }
 
@@ -927,7 +934,7 @@ public class GamePlayManager : NetworkBehaviour
         SerializableCard serializableDiscard = new SerializableCard(c.Type, c.Value);
         wasteCards.Add(serializableDiscard);
 
-        
+
 
         if (p != null)
         {
@@ -936,55 +943,8 @@ public class GamePlayManager : NetworkBehaviour
                 Invoke("SetupGameOver", 2f);
                 return;
             }
-            if (c.Type == CardType.Other)
-            {
-                CurrentPlayer.Timer = true;
-                CurrentPlayer.choosingColor = true;
-                if (CurrentPlayer.isUserPlayer)
-                {
-                    colorChoose.ShowPopup();
-                }
-                else
-                {
-                    Invoke("ChooseColorforAI", Random.Range(3f, 9f));
-                }
-            }
-            else
-            {
-                if (c.Value == CardValue.Reverse)
-                {
-                    clockwiseTurn = !clockwiseTurn;
-                    cardEffectAnimator.Play(clockwiseTurn ? "ClockWiseAnim" : "AntiClockWiseAnim");
-                    Invoke("NextPlayerTurn", 1.5f);
-                }
-                else if (c.Value == CardValue.Skip)
-                {
-                    NextPlayerIndex();
-                    CurrentPlayer.ShowMessage("Turn Skipped!");
-                    Invoke("NextPlayerTurn", 1.5f);
-                }
-                else if (c.Value == CardValue.DrawTwo)
-                {
-                    NextPlayerIndex();
-                    CurrentPlayer.ShowMessage("+2");
-                    wildCardParticle.Emit(30);
-                    StartCoroutine(DealCardsToPlayer(CurrentPlayer, 2, .5f));
-                    Invoke("NextPlayerTurn", 1.5f);
-                }
-                else
-                {
-                    // NextPlayerTurn();
-                }
-            }
         }
     }
-
-    void ChooseColorforAI()
-    {
-        CurrentPlayer.ChooseBestColor();
-    }
-
-    
 
     private int Mod(int x, int m)
     {
@@ -1027,12 +987,12 @@ public class GamePlayManager : NetworkBehaviour
         CardGameManager.PlaySound(uno_btn_clip);
     }
 
-    public void ApplyUnoCharge(Player2 p)
-    {
-        DisableUnoBtn();
-        CurrentPlayer.ShowMessage("Uno Charges");
-        StartCoroutine(DealCardsToPlayer(p, 2, .3f));
-    }
+    //public void ApplyUnoCharge(Player2 p)
+    //{
+    //    DisableUnoBtn();
+    //    CurrentPlayer.ShowMessage("Uno Charges");
+    //    StartCoroutine(DealCardsToPlayer(p, 2, .3f));
+    //}
 
     public void SetupGameOver()
     {
