@@ -48,6 +48,15 @@ public class PlayerCards : MonoBehaviour
         }
     }
 
+    public void Clear()
+    {
+        foreach (var card in cards)
+        {
+            if (card != null)
+                Destroy(card.gameObject);
+        }
+        cards.Clear();
+    }
 
 
     public int GetCount(CardType t)

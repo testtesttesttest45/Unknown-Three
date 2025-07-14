@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,10 +25,7 @@ public class Player2 : MonoBehaviour
     [HideInInspector]
     public bool isInRoom = true;
 
-    void Start()
-    {
-        Timer = false;
-    }
+    
 
     public void SetAvatarProfile(AvatarProfile p)
     {
@@ -41,54 +39,9 @@ public class Player2 : MonoBehaviour
             avatarImage.sprite = Resources.Load<Sprite>("Avatar/" + p.avatarIndex);
     }
 
-    public bool Timer
+    void Start()
     {
-        get
-        {
-            return timerOjbect.activeInHierarchy;
-        }
-        set
-        {
-            CancelInvoke("UpdateTimer");
-            timerOjbect.SetActive(value);
-            if (value)
-            {
-                timerImage.fillAmount = 1f;
-                InvokeRepeating("UpdateTimer", 0f, .1f);
-            }
-            else
-            {
-                timerImage.fillAmount = 0f;
-            }
-        }
-    }
-
-    void UpdateTimer()
-    {
-        timerImage.fillAmount -= 0.1f / totalTimer;
-        if (timerImage.fillAmount <= 0)
-        {
-            if (choosingColor)
-            {
-                if (isUserPlayer)
-                {
-                    GamePlayManager.instance.colorChoose.HidePopup();
-                }
-                // ChooseBestColor();
-            }
-            else if (GamePlayManager.instance.IsDeckArrow)
-            {
-                GamePlayManager.instance.OnDeckClick();
-            }
-            //else if (cardsPanel.AllowedCard.Count > 0)
-            //{
-            //    OnCardClick(FindBestPutCard());
-            //}
-            else
-            {
-                OnTurnEnd();
-            }
-        }
+        SetTimerVisible(false);  // Hide timer by default for all players
     }
 
 
@@ -96,21 +49,16 @@ public class Player2 : MonoBehaviour
     {
         unoClicked = false;
         pickFromDeck = false;
-        totalTimer = turnTimerDuration;
-        Timer = true;
-
-        //if (isUserPlayer)
-        //{
-        //    if (cardsPanel.AllowedCard.Count == 0)
-        //    {
-        //        GamePlayManager.instance.EnableDeckClick();
-        //    }
-        //}
-        //else
-        //{
-        //    StartCoroutine(DoComputerTurn());
-        //}
+        SetTimerVisible(true);
+        timerImage.fillAmount = 1f;
     }
+
+    public void UpdateTurnTimerUI(float secondsLeft, float totalSeconds)
+    {
+        SetTimerVisible(true);
+        timerImage.fillAmount = Mathf.Clamp01(secondsLeft / totalSeconds);
+    }
+
 
 
 
@@ -149,16 +97,18 @@ public class Player2 : MonoBehaviour
 
     public void OnCardClick(Card c)
     {
-        if (Timer)
+        // Only let the player play if it's their turn and the timer is showing
+        if (timerOjbect.activeInHierarchy)
         {
             GamePlayManager.instance.PutCardToWastePile(c, this);
             OnTurnEnd();
         }
     }
 
+
     public void OnTurnEnd()
     {
-        Timer = false;
+        SetTimerVisible(false);
         cardsPanel.UpdatePos();
 
         foreach (var card in cardsPanel.cards)
@@ -171,6 +121,7 @@ public class Player2 : MonoBehaviour
         GamePlayManager.instance.arrowObject.SetActive(false);
         GamePlayManager.instance.unoBtn.SetActive(false);
     }
+
 
 
     public void ShowMessage(string message, bool playStarParticle = false, float duration = 1.5f)
@@ -223,6 +174,13 @@ public class Player2 : MonoBehaviour
         cardsPanel.UpdatePos();
     }
 
+    public void SetTimerVisible(bool visible)
+    {
+        if (timerOjbect != null)
+            timerOjbect.SetActive(visible);
+        if (timerImage != null)
+            timerImage.gameObject.SetActive(visible);
+    }
 
 
 }
