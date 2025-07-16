@@ -60,7 +60,7 @@ public class GamePlayManager : NetworkBehaviour
     private float turnTimerDuration = 6f;
     private float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
-
+    private bool deckInteractionLocked = false;
 
 
     private Card peekedCard = null;
@@ -178,8 +178,11 @@ public class GamePlayManager : NetworkBehaviour
             card.cardIndex = j;
             card.IsClickable = true;
             card.onClick = null;
+
+            CardGameManager.PlaySound(throw_card_clip);
         }
     }
+
 
     int MapClientIdToLocalSeat(ulong clientId)
     {
@@ -437,6 +440,7 @@ public class GamePlayManager : NetworkBehaviour
 
         if (myGlobalIndex == globalPlayerIndex && players[0].isUserPlayer)
         {
+            deckInteractionLocked = false;
             EnableDeckClick();
             UpdateDeckClickability();
         }
@@ -692,7 +696,7 @@ public class GamePlayManager : NetworkBehaviour
             return;
         }
 
-        if (players != null && players.Count > 0 && players[0].isUserPlayer && IsMyTurn() && !hasPeekedCard)
+        if (!deckInteractionLocked && players != null && players.Count > 0 && players[0].isUserPlayer && IsMyTurn() && !hasPeekedCard)
         {
             int n = cardDeckTransform.childCount;
             for (int i = 0; i < n; i++)
@@ -866,6 +870,21 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (!hasPeekedCard || peekedCard == null) return;
 
+        deckInteractionLocked = true;
+        arrowObject.SetActive(false);
+        int n = cardDeckTransform.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            Card c = cardDeckTransform.GetChild(i).GetComponent<Card>();
+            if (c != null)
+            {
+                c.IsClickable = false;
+                c.onClick = null;
+            }
+        }
+
+        if (!hasPeekedCard || peekedCard == null) return;
+
         var discardValue = peekedCard.Value;
         unoBtn.SetActive(false);
         DisableAllHandCardGlow();
@@ -888,7 +907,6 @@ public class GamePlayManager : NetworkBehaviour
                 OnJackCardDiscardedByMe();
             }
         }
-
     }
 
 
@@ -931,6 +949,7 @@ public class GamePlayManager : NetworkBehaviour
             peekedCard = null;
             hasPeekedCard = false;
         }
+        deckInteractionLocked = false;
     }
 
     [ClientRpc]
