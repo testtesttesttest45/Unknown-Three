@@ -36,6 +36,7 @@ public class GamePlayManager : NetworkBehaviour
     public int previousPlayerIndex = -1;
     private Coroutine turnTimeoutCoroutine;
     private bool isJackRevealPhase = false;
+    private bool isPeekingPhase = false;
 
 
     [Header("Player Setting")]
@@ -298,12 +299,15 @@ public class GamePlayManager : NetworkBehaviour
 
     private IEnumerator StartPeekingPhase()
     {
+        isPeekingPhase = true;
+
         float peekTime = 3f;
         int localPlayerIndex = 0;
         var myCards = players[localPlayerIndex].cardsPanel.cards;
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
 
         arrowObject.SetActive(false);
+        DisableDeckClickability();
         for (int i = 0; i < cardDeckTransform.childCount; i++)
         {
             var card = cardDeckTransform.GetChild(i).GetComponent<Card>();
@@ -356,6 +360,8 @@ public class GamePlayManager : NetworkBehaviour
             card.onClick = null;
         }
 
+        isPeekingPhase = false;
+
         if (IsHost)
         {
             currentPlayerIndex = 0;
@@ -363,7 +369,21 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-    int GetGlobalIndexFromLocal(int localIndex)
+    public void DisableDeckClickability()
+    {
+        arrowObject.SetActive(false);
+        int n = cardDeckTransform.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            Card c = cardDeckTransform.GetChild(i).GetComponent<Card>();
+            if (c == null) continue;
+            c.IsClickable = false;
+            c.onClick = null;
+        }
+    }
+
+
+    public int GetGlobalIndexFromLocal(int localIndex)
     {
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         int myGlobalSeat = 0;
@@ -375,7 +395,7 @@ public class GamePlayManager : NetworkBehaviour
         return (myGlobalSeat + localIndex) % playerCount;
     }
 
-    int GetLocalIndexFromGlobal(int globalIndex)
+    public int GetLocalIndexFromGlobal(int globalIndex)
     {
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         int myGlobalSeat = 0;
@@ -682,22 +702,15 @@ public class GamePlayManager : NetworkBehaviour
 
     public void UpdateDeckClickability()
     {
-        if (isJackRevealPhase)
+        if (isJackRevealPhase || isPeekingPhase)
         {
-            arrowObject.SetActive(false);
-            int n = cardDeckTransform.childCount;
-            for (int i = 0; i < n; i++)
-            {
-                Card c = cardDeckTransform.GetChild(i).GetComponent<Card>();
-                if (c == null) continue;
-                c.IsClickable = false;
-                c.onClick = null;
-            }
+            DisableDeckClickability();
             return;
         }
 
         if (!deckInteractionLocked && players != null && players.Count > 0 && players[0].isUserPlayer && IsMyTurn() && !hasPeekedCard)
         {
+            EnableDeckClick();
             int n = cardDeckTransform.childCount;
             for (int i = 0; i < n; i++)
             {
@@ -712,16 +725,10 @@ public class GamePlayManager : NetworkBehaviour
         }
         else
         {
-            int n = cardDeckTransform.childCount;
-            for (int i = 0; i < n; i++)
-            {
-                Card c = cardDeckTransform.GetChild(i).GetComponent<Card>();
-                if (c == null) continue;
-                c.IsClickable = false;
-                c.onClick = null;
-            }
+            DisableDeckClickability();
         }
     }
+
 
     [ClientRpc]
     void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
@@ -890,23 +897,34 @@ public class GamePlayManager : NetworkBehaviour
         DisableAllHandCardGlow();
         RequestDiscardPeekedCardServerRpc(discardValue);
 
-        if (discardValue == CardValue.Jack || discardValue == CardValue.Queen || discardValue == CardValue.King)
+        if (discardValue == CardValue.Jack)
         {
             isJackRevealPhase = true;
             arrowObject.SetActive(false);
             UpdateDeckClickability();
-
             if (players[0].isUserPlayer)
             {
                 players[0].SetTimerVisible(true);
                 players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
             }
-
             if (IsHost)
             {
                 OnJackCardDiscardedByMe();
             }
         }
+        else if (discardValue == CardValue.Queen)
+        {
+            arrowObject.SetActive(false);
+            UpdateDeckClickability();
+            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
+            if (players[0].isUserPlayer)
+            {
+                players[0].SetTimerVisible(true);
+                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
+                Queen.Instance.StartQueenSwap();
+            }
+        }
+
     }
 
 
@@ -979,7 +997,7 @@ public class GamePlayManager : NetworkBehaviour
 
         DiscardPeekedCardWithVisualClientRpc(playerIndex, drawn, cards.ToArray(), wasteCards.ToArray());
 
-        if (discardValue == CardValue.Jack || discardValue == CardValue.Queen || discardValue == CardValue.King)
+        if (discardValue == CardValue.Jack)
         {
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
 
@@ -993,14 +1011,38 @@ public class GamePlayManager : NetworkBehaviour
                     Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                 }
             );
-
             return;
         }
+        else if (discardValue == CardValue.Queen)
+        {
+            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
+
+            if (IsHost)
+                ResetAndRestartTurnTimerCoroutine();
+
+            StartQueenSwapLocalOnlyClientRpc(
+                senderClientId,
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
+                }
+            );
+            return;
+        }
+
         if (IsHost)
             StartCoroutine(DelayedNextPlayerTurn(0.5f));
         else
             EndTurnForAllClientRpc();
     }
+
+    [ClientRpc]
+    void StartQueenSwapLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
+    {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        Queen.Instance.StartQueenSwap();
+    }
+
 
     [ClientRpc]
     void DiscardPeekedCardWithVisualClientRpc(int playerIndex, SerializableCard discardedCard, SerializableCard[] deck, SerializableCard[] wastePile)
@@ -1093,7 +1135,7 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-    IEnumerator DelayedNextPlayerTurn(float delay)
+    public IEnumerator DelayedNextPlayerTurn(float delay)
     {
         yield return new WaitForSeconds(delay);
         if (isTurnEnding) yield break;
@@ -1364,7 +1406,7 @@ public class GamePlayManager : NetworkBehaviour
 
     }
 
-    private void FreezeTimerUI()
+    public void FreezeTimerUI()
     {
         BroadcastTurnTimerClientRpc(turnTimerLeft, turnTimerDuration);
     }

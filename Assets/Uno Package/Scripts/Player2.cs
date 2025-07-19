@@ -41,7 +41,7 @@ public class Player2 : MonoBehaviour
 
     void Start()
     {
-        SetTimerVisible(false);  // Hide timer by default for all players
+        SetTimerVisible(false);
     }
 
 
@@ -59,9 +59,6 @@ public class Player2 : MonoBehaviour
         timerImage.fillAmount = Mathf.Clamp01(secondsLeft / totalSeconds);
     }
 
-
-
-
     public void AddCard(Card c)
     {
         c.transform.SetParent(cardsPanel.transform);
@@ -71,6 +68,9 @@ public class Player2 : MonoBehaviour
             c.onClick = OnCardClick;
             c.IsClickable = false;
         }
+
+        cardsPanel.UpdatePos();
+        ResyncCardIndices();
     }
 
     public void AddCard(Card c, int insertIndex)
@@ -83,6 +83,9 @@ public class Player2 : MonoBehaviour
             c.onClick = OnCardClick;
             c.IsClickable = false;
         }
+
+        cardsPanel.UpdatePos();
+        ResyncCardIndices();
     }
 
     public void RemoveCard(Card c)
@@ -91,13 +94,48 @@ public class Player2 : MonoBehaviour
         c.onClick = null;
         c.IsClickable = false;
         Destroy(c.gameObject);
+
+        cardsPanel.UpdatePos();
+        ResyncCardIndices();
     }
+
+    public void AddSerializableCard(SerializableCard sc, int insertIndex)
+    {
+        Card card = GameObject.Instantiate(GamePlayManager.instance._cardPrefab, cardsPanel.transform);
+        card.Type = sc.Type;
+        card.Value = sc.Value;
+        card.IsOpen = false;
+        card.CalcPoint();
+        card.name = $"{sc.Type}_{sc.Value}";
+
+        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
+        cardsPanel.cards.Insert(insertIndex, card);
+
+        if (isUserPlayer)
+        {
+            card.onClick = OnCardClick;
+            card.IsClickable = false;
+        }
+
+        cardsPanel.UpdatePos();
+        ResyncCardIndices();
+    }
+
+    public void ResyncCardIndices()
+    {
+        int localSeat = GamePlayManager.instance.players.IndexOf(this);
+        for (int i = 0; i < cardsPanel.cards.Count; i++)
+        {
+            cardsPanel.cards[i].cardIndex = i;
+            cardsPanel.cards[i].localSeat = localSeat;
+        }
+    }
+
 
 
 
     public void OnCardClick(Card c)
     {
-        // Only let the player play if it's their turn and the timer is showing
         if (timerOjbect.activeInHierarchy)
         {
             GamePlayManager.instance.PutCardToWastePile(c, this);
@@ -153,26 +191,7 @@ public class Player2 : MonoBehaviour
         return total;
     }
 
-    public void AddSerializableCard(SerializableCard sc, int insertIndex)
-    {
-        Card card = GameObject.Instantiate(GamePlayManager.instance._cardPrefab, cardsPanel.transform);
-        card.Type = sc.Type;
-        card.Value = sc.Value;
-        card.IsOpen = false;
-        card.CalcPoint();
-        card.name = $"{sc.Type}_{sc.Value}";
-
-        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
-        cardsPanel.cards.Insert(insertIndex, card);
-
-        if (isUserPlayer)
-        {
-            card.onClick = OnCardClick;
-            card.IsClickable = false;
-        }
-
-        cardsPanel.UpdatePos();
-    }
+    
 
     public void SetTimerVisible(bool visible)
     {
