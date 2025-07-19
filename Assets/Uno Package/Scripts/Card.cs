@@ -83,22 +83,36 @@ public class Card : MonoBehaviour, IPointerClickHandler
     {
         string txt = "";
         string spritePath = "Cards/BlankCard";
+
         if (IsOpen)
         {
-            int value = (int)Value;
-            spritePath = "Cards/Number_" + ((int)Type + 1);
-            if (value == 6 || value == 9) spritePath += "_Underline";
-
-            if (value <= 10)
+            if (Value == CardValue.Skip)
             {
-                txt = value.ToString();
+                spritePath = $"Cards/Skip_{(int)Type + 1}";
+                txt = "";
+            }
+            else if (Value == CardValue.Jack)
+            {
+                spritePath = $"Cards/Number_{(int)Type + 1}";
+                txt = "J";
+            }
+            else if (Value == CardValue.Queen)
+            {
+                spritePath = $"Cards/Number_{(int)Type + 1}";
+                txt = "Q";
+            }
+            else if (Value == CardValue.King)
+            {
+                spritePath = $"Cards/Number_{(int)Type + 1}";
+                txt = "K";
             }
             else
             {
-                if (Value == CardValue.Jack) txt = "J";
-                else if (Value == CardValue.Queen) txt = "Q";
-                else if (Value == CardValue.King) txt = "K";
-                else txt = Value.ToString();
+                int value = (int)Value;
+                spritePath = $"Cards/Number_{(int)Type + 1}";
+                if (value == 6 || value == 9)
+                    spritePath += "_Underline";
+                txt = value.ToString();
             }
         }
 
@@ -115,6 +129,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
         label2.text = txt;
         label3.text = txt;
     }
+
 
 
 

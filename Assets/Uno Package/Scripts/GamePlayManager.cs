@@ -249,7 +249,8 @@ public class GamePlayManager : NetworkBehaviour
         CardValue.Ten,
         CardValue.Jack,
         CardValue.Queen,
-        CardValue.King
+        CardValue.King,
+        CardValue.Skip
     };
 
         for (int j = 0; j < 4; j++)
@@ -430,7 +431,7 @@ public class GamePlayManager : NetworkBehaviour
     }
 
     [ClientRpc]
-    void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
+    public void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
     {
         isTurnEnding = false;
         isJackRevealPhase = false;
@@ -1027,6 +1028,17 @@ public class GamePlayManager : NetworkBehaviour
                     Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                 }
             );
+            return;
+        }
+
+        else if (discardValue == CardValue.Skip)
+        {
+            if (IsHost && Skip.Instance != null)
+                Skip.Instance.TriggerSkip();
+            else
+                Debug.LogError("Skip.Instance is null! Make sure Skip.cs is in the scene.");
+
+
             return;
         }
 
