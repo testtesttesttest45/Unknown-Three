@@ -145,14 +145,15 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
     }
 
-
     public void OnPointerClick(PointerEventData eventData)
     {
+        Debug.Log($"[Card Click] {gameObject.name} - IsClickable: {IsClickable}");
         if (IsClickable && onClick != null)
         {
             onClick.Invoke(this);
         }
     }
+
 
     //public bool IsAllowCard()
     //{

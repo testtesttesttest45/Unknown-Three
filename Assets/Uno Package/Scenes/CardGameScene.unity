@@ -5616,11 +5616,11 @@ RectTransform:
   m_Children:
   - {fileID: 1519604161}
   - {fileID: 1720348326}
-  - {fileID: 508633654}
   - {fileID: 554235828}
   - {fileID: 1770561383}
   - {fileID: 65167660}
   - {fileID: 543103010}
+  - {fileID: 508633654}
   m_Father: {fileID: 689146891}
   m_LocalEulerAnglesHint: {x: 20, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
