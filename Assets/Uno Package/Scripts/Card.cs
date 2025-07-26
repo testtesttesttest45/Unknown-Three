@@ -17,6 +17,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
     [HideInInspector] public int cardIndex;
     public bool PeekMode = false;
     public GameObject glowOutline;
+    public GameObject killedOutline;
 
     [Space(20)]
     public Text label1;
@@ -167,5 +168,10 @@ public class Card : MonoBehaviour, IPointerClickHandler
     {
         if (glowOutline != null)
             glowOutline.SetActive(show);
+    }
+    public void ShowKilledOutline(bool show)
+    {
+        if (killedOutline != null)
+            killedOutline.SetActive(show);
     }
 }

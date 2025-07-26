@@ -91,6 +91,13 @@ public class Queen : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void RequestQueenSwapServerRpc(int playerAIndex, int cardAIndex, int playerBIndex, int cardBIndex, ServerRpcParams rpcParams = default)
     {
+        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
+        {
+            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
+            GamePlayManager.instance.turnTimeoutCoroutine = null;
+        }
+        GamePlayManager.instance.FreezeTimerUI();
+
         var players = GamePlayManager.instance.players;
 
         var cardA = players[playerAIndex].cardsPanel.cards[cardAIndex];
@@ -109,7 +116,7 @@ public class Queen : NetworkBehaviour
 
         QueenSwapClientRpc(playerAIndex, cardAIndex, dataB, playerBIndex, cardBIndex, dataA);
 
-        GamePlayManager.instance.FreezeTimerUI();
+        
         if (IsHost)
             StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
     }

@@ -34,7 +34,7 @@ public class GamePlayManager : NetworkBehaviour
     public ParticleSystem wildCardParticle;
     public GameObject menuButton;
     public int previousPlayerIndex = -1;
-    private Coroutine turnTimeoutCoroutine;
+    public Coroutine turnTimeoutCoroutine;
     private bool isJackRevealPhase = false;
     private bool isPeekingPhase = false;
     public bool wasteInteractionStarted = false;
@@ -58,11 +58,11 @@ public class GamePlayManager : NetworkBehaviour
     public List<SerializableCard> wasteCards;
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
-    private float turnTimerDuration = 6f;
+    public float turnTimerDuration = 6f;
     private float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
-
+    public bool isKingRefillPhase = false;
 
     public Card peekedCard = null;
     public bool hasPeekedCard = false;
@@ -450,11 +450,18 @@ public class GamePlayManager : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void RequestWasteCardSwapServerRpc(int handIndex, SerializableCard newCard, SerializableCard replacedCard, ServerRpcParams rpcParams = default)
     {
+        if (turnTimeoutCoroutine != null)
+        {
+            StopCoroutine(turnTimeoutCoroutine);
+            turnTimeoutCoroutine = null;
+        }
+        FreezeTimerUI();
+
         ulong clientId = rpcParams.Receive.SenderClientId;
         int playerIndex = GetPlayerIndexFromClientId(clientId);
         if (playerIndex < 0 || playerIndex >= players.Count) return;
 
-        GamePlayManager.instance.wasteCards.Add(replacedCard);
+        wasteCards.Add(replacedCard);
 
         ReplaceHandCardClientRpc(playerIndex, handIndex, newCard, replacedCard,
             cards.ToArray(), wasteCards.ToArray(), true);
@@ -740,7 +747,7 @@ public class GamePlayManager : NetworkBehaviour
     }
 
     [ClientRpc]
-    void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
+    public void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
     {
         for (int i = cardDeckTransform.childCount - 1; i >= 0; i--)
             Destroy(cardDeckTransform.GetChild(i).gameObject);
@@ -769,6 +776,7 @@ public class GamePlayManager : NetworkBehaviour
 
     public void OnDeckClickedByPlayer()
     {
+        if (isKingRefillPhase) return;
         WastePile waste = GameObject.FindObjectOfType<WastePile>();
         if (waste != null)
         {
@@ -859,6 +867,7 @@ public class GamePlayManager : NetworkBehaviour
 
     public void EnableHandCardReplacementGlow()
     {
+        if (isKingRefillPhase) return;
         if (!IsMyTurn() || !players[0].isUserPlayer) return;
         for (int i = 0; i < players[0].cardsPanel.cards.Count; i++)
         {
@@ -923,6 +932,18 @@ public class GamePlayManager : NetworkBehaviour
                 players[0].SetTimerVisible(true);
                 players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
                 Queen.Instance.StartQueenSwap();
+            }
+        }
+        else if (discardValue == CardValue.King)
+        {
+            arrowObject.SetActive(false);
+            UpdateDeckClickability();
+            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
+            if (players[0].isUserPlayer)
+            {
+                players[0].SetTimerVisible(true);
+                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
+                King.Instance.StartKingPhase();
             }
         }
 
@@ -1028,14 +1049,28 @@ public class GamePlayManager : NetworkBehaviour
             );
             return;
         }
+        else if (discardValue == CardValue.King)
+        {
+            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
+
+            if (IsHost)
+                ResetAndRestartTurnTimerCoroutine();
+
+            StartKingGlowLocalOnlyClientRpc(
+                senderClientId,
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
+                }
+            );
+            return;
+        }
+
 
         else if (discardValue == CardValue.Skip)
         {
             if (IsHost && Skip.Instance != null)
                 Skip.Instance.TriggerSkip();
-            else
-                Debug.LogError("Skip.Instance is null! Make sure Skip.cs is in the scene.");
-
 
             return;
         }
@@ -1052,6 +1087,14 @@ public class GamePlayManager : NetworkBehaviour
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Queen.Instance.StartQueenSwap();
     }
+
+    [ClientRpc]
+    void StartKingGlowLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
+    {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        King.Instance.StartKingPhase();
+    }
+
 
     [ClientRpc]
     void DiscardPeekedCardWithVisualClientRpc(int playerIndex, SerializableCard discardedCard, SerializableCard[] deck, SerializableCard[] wastePile)
@@ -1077,7 +1120,7 @@ public class GamePlayManager : NetworkBehaviour
         OnUnoClick();
     }
 
-    IEnumerator AnimateCardMove(Card card, Vector3 from, Vector3 to, float duration, float? targetZRot = null)
+    public IEnumerator AnimateCardMove(Card card, Vector3 from, Vector3 to, float duration, float? targetZRot = null)
     {
         if (card == null) yield break;
 
@@ -1111,12 +1154,14 @@ public class GamePlayManager : NetworkBehaviour
 
     public void OnHandCardReplaceRequested(int handIndex)
     {
+        if (isKingRefillPhase) return;
         RequestReplaceHandCardServerRpc(handIndex);
     }
 
     [ServerRpc(RequireOwnership = false)]
     void RequestReplaceHandCardServerRpc(int handIndex, ServerRpcParams rpcParams = default)
     {
+        if (isKingRefillPhase) return;
         if (turnTimeoutCoroutine != null)
         {
             StopCoroutine(turnTimeoutCoroutine);
@@ -1163,6 +1208,7 @@ public class GamePlayManager : NetworkBehaviour
     SerializableCard[] wastePile,
     bool fromWastePile)
     {
+        if (isKingRefillPhase) return;
         int localSeat = GetLocalIndexFromGlobal(playerIndex);
         var p = players[localSeat];
 

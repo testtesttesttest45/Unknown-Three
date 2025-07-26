@@ -88,16 +88,18 @@ public class Player2 : MonoBehaviour
         ResyncCardIndices();
     }
 
-    public void RemoveCard(Card c)
+    public void RemoveCard(Card c, bool updatePos = true)
     {
         cardsPanel.cards.Remove(c);
         c.onClick = null;
         c.IsClickable = false;
         Destroy(c.gameObject);
 
-        cardsPanel.UpdatePos();
+        if (updatePos)
+            cardsPanel.UpdatePos();
         ResyncCardIndices();
     }
+
 
     public void AddSerializableCard(SerializableCard sc, int insertIndex)
     {

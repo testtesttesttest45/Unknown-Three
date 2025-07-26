@@ -5674,6 +5674,7 @@ MonoBehaviour:
   wildCardParticle: {fileID: 1408218706}
   menuButton: {fileID: 525378197}
   previousPlayerIndex: -1
+  wasteInteractionStarted: 0
   players:
   - {fileID: 858389341}
   - {fileID: 517660853}
@@ -5693,6 +5694,12 @@ MonoBehaviour:
   loseTimerAnimation: {fileID: 1707972727156602, guid: 282b956cdd211ed42891b68241677279,
     type: 3}
   screenCanvas: {fileID: 1220166718}
+  cards: []
+  wasteCards: []
+  turnTimerDuration: 6
+  deckInteractionLocked: 0
+  peekedCard: {fileID: 0}
+  hasPeekedCard: 0
   _currentType: 0
   _currentValue: 0
 --- !u!114 &144639355
@@ -7416,6 +7423,72 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 395467954}
   m_CullTransparentMesh: 1
+--- !u!1 &398830984
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 398830987}
+  - component: {fileID: 398830988}
+  - component: {fileID: 398830989}
+  m_Layer: 0
+  m_Name: KingManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &398830987
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 398830984}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &398830988
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 398830984}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 2840885065
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+--- !u!114 &398830989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 398830984}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67d903f69a445ba46952f4c20e1944d0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &408291047
 GameObject:
   m_ObjectHideFlags: 0
@@ -43429,3 +43502,4 @@ SceneRoots:
   - {fileID: 1220166722}
   - {fileID: 2127662518}
   - {fileID: 1868318408}
+  - {fileID: 398830987}

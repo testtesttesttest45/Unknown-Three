@@ -13,6 +13,13 @@ public class WastePile : MonoBehaviour
         wasteCard = card;
         wasteCard.onClick = OnWasteCardClicked;
 
+        // no clicks if killed by King
+        if (wasteCard.killedOutline != null && wasteCard.killedOutline.activeSelf)
+        {
+            wasteCard.IsClickable = false;
+            return;
+        }
+
         bool isTop = wasteCard.transform.GetSiblingIndex() == wasteCard.transform.parent.childCount - 1;
         bool canClick = NetworkManager.Singleton.IsClient &&
                         GamePlayManager.instance.IsMyTurn() &&
@@ -21,13 +28,18 @@ public class WastePile : MonoBehaviour
                         isTop;
 
         wasteCard.IsClickable = canClick;
-        GamePlayManager.instance.EnableHandCardReplacementGlow();
     }
 
 
     public void ForceUpdateClickable()
     {
         if (wasteCard == null) return;
+
+        if (wasteCard.killedOutline != null && wasteCard.killedOutline.activeSelf)
+        {
+            wasteCard.IsClickable = false;
+            return;
+        }
 
         bool isTop = wasteCard.transform.GetSiblingIndex() == wasteCard.transform.parent.childCount - 1;
         bool canClick = NetworkManager.Singleton.IsClient &&
@@ -99,6 +111,13 @@ public class WastePile : MonoBehaviour
         if (!isChoosing || wasteCard == null) return;
         isChoosing = false;
 
+        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
+        {
+            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
+            GamePlayManager.instance.turnTimeoutCoroutine = null;
+        }
+        GamePlayManager.instance.FreezeTimerUI();
+
         StopAllCoroutines();
         DisableHandGlow();
 
@@ -108,8 +127,8 @@ public class WastePile : MonoBehaviour
         wasteCard = null;
 
         GamePlayManager.instance.RequestWasteCardSwapServerRpc(index, newCard, replacedCard);
-
     }
+
 
 
     private IEnumerator WaitForHandCardClickTimeout()
