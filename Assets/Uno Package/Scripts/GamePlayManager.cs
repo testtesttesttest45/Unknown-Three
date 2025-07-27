@@ -249,6 +249,7 @@ public class GamePlayManager : NetworkBehaviour
         CardValue.Jack,
         CardValue.Queen,
         CardValue.King,
+        CardValue.Fiend,
         CardValue.Skip
     };
 

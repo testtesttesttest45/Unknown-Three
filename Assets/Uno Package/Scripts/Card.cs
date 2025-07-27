@@ -107,6 +107,11 @@ public class Card : MonoBehaviour, IPointerClickHandler
                 spritePath = $"Cards/Number_{(int)Type + 1}";
                 txt = "K";
             }
+            else if (Value == CardValue.Fiend)
+            {
+                spritePath = $"Cards/Number_{(int)Type + 1}";
+                txt = "F";
+            }
             else
             {
                 int value = (int)Value;
