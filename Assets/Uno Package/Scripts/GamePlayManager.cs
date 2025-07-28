@@ -947,6 +947,18 @@ public class GamePlayManager : NetworkBehaviour
                 King.Instance.StartKingPhase();
             }
         }
+        else if (discardValue == CardValue.Fiend || discardValue == CardValue.Ten || discardValue == CardValue.Nine || discardValue == CardValue.Ten || discardValue == CardValue.Eight)
+        {
+            arrowObject.SetActive(false);
+            UpdateDeckClickability();
+            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
+            if (players[0].isUserPlayer)
+            {
+                players[0].SetTimerVisible(true);
+                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
+                Fiend.Instance.ShowFiendPopup();
+            }
+        }
 
     }
 
@@ -1066,6 +1078,22 @@ public class GamePlayManager : NetworkBehaviour
             );
             return;
         }
+        else if (discardValue == CardValue.Fiend || discardValue == CardValue.Ten || discardValue == CardValue.Nine || discardValue == CardValue.Eight)
+        {
+            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
+            if (IsHost)
+                ResetAndRestartTurnTimerCoroutine();
+
+            StartFiendPopupLocalOnlyClientRpc(
+                senderClientId,
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
+                }
+            );
+            return;
+        }
+
 
 
         else if (discardValue == CardValue.Skip)
@@ -1081,6 +1109,14 @@ public class GamePlayManager : NetworkBehaviour
         else
             EndTurnForAllClientRpc();
     }
+
+    [ClientRpc]
+    void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
+    {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        Fiend.Instance.ShowFiendPopup();
+    }
+
 
     [ClientRpc]
     void StartQueenSwapLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
