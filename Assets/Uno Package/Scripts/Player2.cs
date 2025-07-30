@@ -61,6 +61,10 @@ public class Player2 : MonoBehaviour
 
     public void AddCard(Card c)
     {
+        if (cardsPanel == null)
+        {
+            Debug.LogError($"{gameObject.name}: cardsPanel is NULL in AddCard!");
+        }
         c.transform.SetParent(cardsPanel.transform);
         cardsPanel.cards.Add(c);
         if (isUserPlayer)
@@ -122,9 +126,10 @@ public class Player2 : MonoBehaviour
         cardsPanel.UpdatePos();
         ResyncCardIndices();
     }
-
     public void ResyncCardIndices()
     {
+        if (GamePlayManager.instance == null || GamePlayManager.instance.players == null)
+            return;
         int localSeat = GamePlayManager.instance.players.IndexOf(this);
         for (int i = 0; i < cardsPanel.cards.Count; i++)
         {
@@ -132,7 +137,6 @@ public class Player2 : MonoBehaviour
             cardsPanel.cards[i].localSeat = localSeat;
         }
     }
-
 
 
 

@@ -1,8 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
 using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 #pragma warning disable 0618
 
 public class GamePlayManager : NetworkBehaviour
@@ -95,10 +96,69 @@ public class GamePlayManager : NetworkBehaviour
 
     void Start()
     {
+        Application.targetFrameRate = 120;
         instance = this;
         Input.multiTouchEnabled = false;
         previousPlayerIndex = -1;
     }
+
+    public override void OnNetworkSpawn()
+    {
+        Debug.Log("[GamePlayManager] OnNetworkSpawn! Safe to set up player panels.");
+        SetupAllPlayerPanels();
+
+        if (IsHost)
+        {
+            StartMultiplayerGame();
+        }
+    }
+
+
+    void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+    void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "CardGameScene")
+        {
+            Debug.Log("[GamePlayManager] Scene loaded! Setting up player panels.");
+            SetupNetworkedPlayerSeats();
+        }
+    }
+
+
+    public void SetupAllPlayerPanels()
+    {
+        Transform playersRoot = screenCanvas.transform.Find("Players");
+        players = new List<Player2>();
+
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < playerList.Count; i++)
+        {
+            var panel = playersRoot.Find($"PlayerPanel_{i + 1}");
+            if (panel == null)
+            {
+                Debug.LogError($"PlayerPanel_{i + 1} not found in Players!");
+            }
+            var p2 = panel.GetComponent<Player2>();
+            if (p2 == null)
+            {
+                Debug.LogError($"PlayerPanel_{i + 1} is missing Player2!");
+            }
+            if (playerList[i].clientId >= 9000)
+                panel.gameObject.SetActive(false);
+            else
+                panel.gameObject.SetActive(true);
+
+            players.Add(p2);
+        }
+    }
+
 
     public void StartMultiplayerGame()
     {
@@ -154,6 +214,7 @@ public class GamePlayManager : NetworkBehaviour
             AssignHandToSeat(localSeat, hand);
         }
 
+
         for (int seat = 0; seat < playerCount; seat++)
             players[seat].cardsPanel.UpdatePos();
 
@@ -164,6 +225,8 @@ public class GamePlayManager : NetworkBehaviour
     {
         var player = players[localSeat];
         player.cardsPanel.Clear();
+        Debug.Log($"AssignHandToSeat: players.Count={players.Count} localSeat={localSeat} player={players[localSeat]?.gameObject.name}");
+
         for (int j = 0; j < hand.Count; j++)
         {
             var sc = hand[j];
