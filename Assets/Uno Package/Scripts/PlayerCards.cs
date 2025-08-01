@@ -1,7 +1,5 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
-
 
 public class PlayerCards : MonoBehaviour
 {
@@ -13,7 +11,9 @@ public class PlayerCards : MonoBehaviour
 
     void Awake()
     {
-        cards = new List<Card>();
+        cards = new List<Card>(3);
+        for (int i = 0; i < 3; i++)
+            cards.Add(null);
     }
 
     public void UpdatePos(float delay = 0f)
@@ -23,19 +23,23 @@ public class PlayerCards : MonoBehaviour
         float space = 0;
         float start = 0;
         float totalWidth = GetComponent<RectTransform>().sizeDelta.x;
-        if (cards.Count > 1)
+        int realCount = 0;
+        for (int i = 0; i < cards.Count; i++) if (cards[i] != null) realCount++;
+        if (realCount > 1)
         {
-            space = (totalWidth - cardSize.x) / (cards.Count - 1);
+            space = (totalWidth - cardSize.x) / (realCount - 1);
             if (space > maxSpace)
             {
                 space = maxSpace;
-                totalWidth = (space * (cards.Count - 1)) + cardSize.x;
+                totalWidth = (space * (realCount - 1)) + cardSize.x;
             }
             start = (totalWidth / -2) + cardSize.x / 2;
         }
 
+        int idx = 0;
         for (int i = 0; i < cards.Count; i++)
         {
+            if (cards[i] == null) continue;
             RectTransform item = cards[i].GetComponent<RectTransform>();
             item.SetSiblingIndex(i);
             item.anchorMax = Vector2.one * .5f;
@@ -44,25 +48,27 @@ public class PlayerCards : MonoBehaviour
             item.sizeDelta = cardSize;
             cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
             start += space;
+            idx++;
         }
     }
 
     public void Clear()
     {
-        foreach (var card in cards)
+        // Destroy any card objects and set to null
+        for (int i = 0; i < cards.Count; i++)
         {
-            if (card != null)
-                Destroy(card.gameObject);
+            if (cards[i] != null)
+            {
+                Destroy(cards[i].gameObject);
+            }
+            cards[i] = null;
         }
-        cards.Clear();
+        // Ensure exactly 3 slots
+        if (cards.Count < 3)
+            for (int i = cards.Count; i < 3; i++)
+                cards.Add(null);
+        else if (cards.Count > 3)
+            cards.RemoveRange(3, cards.Count - 3);
     }
 
-
-    public int GetCount(CardType t)
-    {
-        List<Card> temp = cards.FindAll((obj) => obj.Type == t);
-        if (temp == null)
-            return 0;
-        return temp.Count;
-    }
 }

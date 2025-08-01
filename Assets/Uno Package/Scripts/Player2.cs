@@ -25,8 +25,6 @@ public class Player2 : MonoBehaviour
     [HideInInspector]
     public bool isInRoom = true;
 
-    
-
     public void SetAvatarProfile(AvatarProfile p)
     {
         playerName = p.avatarName;
@@ -44,7 +42,6 @@ public class Player2 : MonoBehaviour
         SetTimerVisible(false);
     }
 
-
     public void OnTurn()
     {
         unoClicked = false;
@@ -59,63 +56,62 @@ public class Player2 : MonoBehaviour
         timerImage.fillAmount = Mathf.Clamp01(secondsLeft / totalSeconds);
     }
 
-    public void AddCard(Card c)
+    public void AddCard(Card c, int slot)
     {
-        if (cardsPanel == null)
+        if (c == null)
         {
-            Debug.LogError($"{gameObject.name}: cardsPanel is NULL in AddCard!");
+            // No card, just clear the slot and return
+            if (cardsPanel.cards[slot] != null)
+                Destroy(cardsPanel.cards[slot].gameObject);
+
+            cardsPanel.cards[slot] = null;
+            cardsPanel.UpdatePos();
+            ResyncCardIndices();
+            return;
         }
+
         c.transform.SetParent(cardsPanel.transform);
-        cardsPanel.cards.Add(c);
+        if (cardsPanel.cards[slot] != null)
+        {
+            Destroy(cardsPanel.cards[slot].gameObject);
+        }
+        cardsPanel.cards[slot] = c;
         if (isUserPlayer)
         {
             c.onClick = OnCardClick;
             c.IsClickable = false;
         }
-
-        cardsPanel.UpdatePos();
-        ResyncCardIndices();
-    }
-
-    public void AddCard(Card c, int insertIndex)
-    {
-        c.transform.SetParent(cardsPanel.transform);
-        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
-        cardsPanel.cards.Insert(insertIndex, c);
-        if (isUserPlayer)
-        {
-            c.onClick = OnCardClick;
-            c.IsClickable = false;
-        }
-
         cardsPanel.UpdatePos();
         ResyncCardIndices();
     }
 
     public void RemoveCard(Card c, bool updatePos = true)
     {
-        cardsPanel.cards.Remove(c);
-        c.onClick = null;
-        c.IsClickable = false;
-        Destroy(c.gameObject);
-
-        if (updatePos)
-            cardsPanel.UpdatePos();
-        ResyncCardIndices();
+        int idx = cardsPanel.cards.IndexOf(c);
+        if (idx >= 0)
+        {
+            c.onClick = null;
+            c.IsClickable = false;
+            Destroy(c.gameObject);
+            cardsPanel.cards[idx] = null;
+            if (updatePos)
+                cardsPanel.UpdatePos();
+            ResyncCardIndices();
+        }
     }
 
-
-    public void AddSerializableCard(SerializableCard sc, int insertIndex)
+    public void AddSerializableCard(SerializableCard sc, int slot)
     {
-        Card card = GameObject.Instantiate(GamePlayManager.instance._cardPrefab, cardsPanel.transform);
+        Card card = Instantiate(GamePlayManager.instance._cardPrefab, cardsPanel.transform);
         card.Type = sc.Type;
         card.Value = sc.Value;
         card.IsOpen = false;
         card.CalcPoint();
         card.name = $"{sc.Type}_{sc.Value}";
 
-        insertIndex = Mathf.Clamp(insertIndex, 0, cardsPanel.cards.Count);
-        cardsPanel.cards.Insert(insertIndex, card);
+        if (cardsPanel.cards[slot] != null)
+            Destroy(cardsPanel.cards[slot].gameObject);
+        cardsPanel.cards[slot] = card;
 
         if (isUserPlayer)
         {
@@ -126,6 +122,7 @@ public class Player2 : MonoBehaviour
         cardsPanel.UpdatePos();
         ResyncCardIndices();
     }
+
     public void ResyncCardIndices()
     {
         if (GamePlayManager.instance == null || GamePlayManager.instance.players == null)
@@ -133,9 +130,12 @@ public class Player2 : MonoBehaviour
         int localSeat = GamePlayManager.instance.players.IndexOf(this);
         for (int i = 0; i < cardsPanel.cards.Count; i++)
         {
-            cardsPanel.cards[i].cardIndex = i;
-            cardsPanel.cards[i].localSeat = localSeat;
+            var card = cardsPanel.cards[i];
+            if (card == null) continue;
+            card.cardIndex = i;
+            card.localSeat = localSeat;
         }
+
     }
 
 
@@ -157,16 +157,14 @@ public class Player2 : MonoBehaviour
 
         foreach (var card in cardsPanel.cards)
         {
+            if (card == null) continue;
             card.IsClickable = false;
             card.onClick = null;
-            // card.SetGaryColor(false);
         }
 
         GamePlayManager.instance.arrowObject.SetActive(false);
         GamePlayManager.instance.unoBtn.SetActive(false);
     }
-
-
 
     public void ShowMessage(string message, bool playStarParticle = false, float duration = 1.5f)
     {

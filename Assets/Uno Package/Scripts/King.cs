@@ -105,16 +105,14 @@ public class King : NetworkBehaviour
         await System.Threading.Tasks.Task.Delay(1000);
 
         var gpm = GamePlayManager.instance;
-        if (gpm.cards.Count == 0) return;
+        if (gpm.cards.Count == 0) return; // no cards left to refill
 
         SerializableCard topCard = gpm.cards[gpm.cards.Count - 1];
         gpm.cards.RemoveAt(gpm.cards.Count - 1);
 
         KingRefillHandClientRpc(globalSeat, cardIndex, topCard, gpm.cards.ToArray()); 
         GamePlayManager.instance.isKingRefillPhase = false;
-        if (IsHost)
-            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.3f));
-
+        
     }
 
     [ClientRpc]
@@ -123,22 +121,22 @@ public class King : NetworkBehaviour
         int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat);
         var player = GamePlayManager.instance.players[localSeat];
 
-        // Get hand slot position for this seat/index
         Vector3 toPos;
         float toZRot;
 
-        // If using fixed slots:
-        if (player.cardsPanel.cards.Count > cardIndex && player.cardsPanel.cards[cardIndex] == null)
+        if (player.cardsPanel.cards.Count > cardIndex &&
+            player.cardsPanel.cards[cardIndex] == null &&
+            player.cardsPanel.transform.childCount > cardIndex)
         {
             toPos = player.cardsPanel.transform.GetChild(cardIndex).position;
             toZRot = player.cardsPanel.transform.GetChild(cardIndex).rotation.eulerAngles.z;
         }
         else
         {
-            // fallback to hand anchor, or default
             toPos = player.cardsPanel.transform.position;
             toZRot = 0f;
         }
+
 
         var newCardObj = GameObject.Instantiate(
             GamePlayManager.instance._cardPrefab,
@@ -151,7 +149,6 @@ public class King : NetworkBehaviour
         newCard.IsOpen = false;
         newCard.CalcPoint();
 
-        // Animate deck to hand slot
         GamePlayManager.instance.StartCoroutine(
             KingAnimateDeckToHandSlotAndInsert(player, cardIndex, newCard, toPos, toZRot, 0.3f)
         );
@@ -176,10 +173,20 @@ public class King : NetworkBehaviour
         card.transform.position = toPos;
         card.transform.rotation = toRot;
 
-        // Insert into hand
         player.AddCard(card, handIndex);
         player.cardsPanel.UpdatePos();
+
+        Card justInserted = player.cardsPanel.cards[handIndex];
+        if (justInserted != null)
+            justInserted.FlashMarkedOutline();
+
+        float flashDuration = 2.0f;
+        yield return new WaitForSeconds(flashDuration);
+
+        if (NetworkManager.Singleton.IsHost)
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }
+
 
     [ClientRpc]
     private void KingKillCardClientRpc(int globalSeat, int cardIndex)
@@ -191,7 +198,6 @@ public class King : NetworkBehaviour
         Vector3 fromPos = killed.transform.position;
         float fromZRot = killed.transform.rotation.eulerAngles.z;
 
-        // Animate card to waste
         var wasteObj = GameObject.Instantiate(
             GamePlayManager.instance._cardPrefab,
             fromPos,

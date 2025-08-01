@@ -38,19 +38,25 @@ public class WastePile : MonoBehaviour
         if (wasteCard.killedOutline != null && wasteCard.killedOutline.activeSelf)
         {
             wasteCard.IsClickable = false;
+            Debug.Log($"[WastePile] Waste card {wasteCard.name} is killed. Not clickable.");
             return;
         }
 
         bool isTop = wasteCard.transform.GetSiblingIndex() == wasteCard.transform.parent.childCount - 1;
+        bool myTurn = GamePlayManager.instance.IsMyTurn();
+        bool isUser = GamePlayManager.instance.players[0].isUserPlayer;
+        bool hasPeeked = GamePlayManager.instance.hasPeekedCard;
+
         bool canClick = NetworkManager.Singleton.IsClient &&
-                        GamePlayManager.instance.IsMyTurn() &&
-                        GamePlayManager.instance.players[0].isUserPlayer &&
-                        !GamePlayManager.instance.hasPeekedCard &&
+                        myTurn &&
+                        isUser &&
+                        !hasPeeked &&
                         isTop;
+
+        Debug.Log($"[WastePile] Waste card {wasteCard.name} - isTop: {isTop}, myTurn: {myTurn}, isUser: {isUser}, hasPeeked: {hasPeeked} → canClick: {canClick}");
 
         wasteCard.IsClickable = canClick;
     }
-
 
     public void Initialize(Card card)
     {

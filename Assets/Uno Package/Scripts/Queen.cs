@@ -116,9 +116,6 @@ public class Queen : NetworkBehaviour
 
         QueenSwapClientRpc(playerAIndex, cardAIndex, dataB, playerBIndex, cardBIndex, dataA);
 
-        
-        if (IsHost)
-            StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
     }
 
     [ClientRpc]
@@ -175,6 +172,7 @@ public class Queen : NetworkBehaviour
         float duration = 0.35f;
         float elapsed = 0f;
 
+        // Animate the swap
         while (elapsed < duration)
         {
             cardA.transform.position = Vector3.Lerp(posA, posB, elapsed / duration);
@@ -187,7 +185,6 @@ public class Queen : NetworkBehaviour
 
         cardA.transform.localRotation = Quaternion.identity;
         cardA.transform.localScale = Vector3.one;
-
         cardB.transform.localRotation = Quaternion.identity;
         cardB.transform.localScale = Vector3.one;
 
@@ -196,5 +193,17 @@ public class Queen : NetworkBehaviour
 
         panelA.UpdatePos();
         panelB.UpdatePos();
+
+        // --- NEW: Flash both cards ---
+        cardA.FlashMarkedOutline();
+        cardB.FlashMarkedOutline();
+
+        // Wait for flash to finish (set to your effect's duration, e.g. 2f)
+        yield return new WaitForSeconds(2f);
+
+        // --- Host advances turn after flash ---
+        if (NetworkManager.Singleton.IsHost)
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }
+
 }

@@ -6598,7 +6598,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 100
+  maxSpace: 300
   cardSize: {x: 105, y: 152}
   cards: []
   autoUpdatePositions: 1
@@ -8254,7 +8254,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 100
+  maxSpace: 110
   cardSize: {x: 105, y: 152}
   cards: []
   autoUpdatePositions: 1
@@ -8306,7 +8306,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 100
+  maxSpace: 300
   cardSize: {x: 105, y: 152}
   cards: []
   autoUpdatePositions: 1
@@ -11313,7 +11313,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 070deb00c07755f449ba80a5aafb795b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxSpace: 100
+  maxSpace: 300
   cardSize: {x: 105, y: 152}
   cards: []
   autoUpdatePositions: 1

@@ -18,6 +18,9 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public bool PeekMode = false;
     public GameObject glowOutline;
     public GameObject killedOutline;
+    public GameObject markedOutline;
+    private Coroutine flashMarkedRoutine;
+    public GameObject eyeOutline;
 
     [Space(20)]
     public Text label1;
@@ -136,9 +139,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
         label3.text = txt;
     }
 
-
-
-
     public void CalcPoint()
     {
         if (Value == CardValue.King || Value == CardValue.Queen || Value == CardValue.Jack)
@@ -160,7 +160,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
     }
 
-
     //public bool IsAllowCard()
     //{
     //    return Type == GamePlayManager.instance.CurrentType ||
@@ -179,4 +178,86 @@ public class Card : MonoBehaviour, IPointerClickHandler
         if (killedOutline != null)
             killedOutline.SetActive(show);
     }
+
+    public void FlashMarkedOutline(float duration = 2f, float pulseSpeed = 6f)
+    {
+        if (flashMarkedRoutine != null)
+            StopCoroutine(flashMarkedRoutine);
+        flashMarkedRoutine = StartCoroutine(DoFlashMarkedOutline(duration, pulseSpeed));
+    }
+
+    private IEnumerator DoFlashMarkedOutline(float duration, float pulseSpeed)
+    {
+        if (markedOutline == null)
+            yield break;
+
+        markedOutline.SetActive(true);
+
+        // If your markedOutline is a UI Image, animate the alpha. Otherwise, just toggle on/off for a basic effect.
+        Image outlineImg = markedOutline.GetComponent<Image>();
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            if (outlineImg != null)
+            {
+                float alpha = Mathf.Abs(Mathf.Sin(elapsed * pulseSpeed)); // Pulses 0..1
+                Color c = outlineImg.color;
+                c.a = alpha;
+                outlineImg.color = c;
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Hide or reset
+        if (outlineImg != null)
+        {
+            Color c = outlineImg.color;
+            c.a = 0f;
+            outlineImg.color = c;
+        }
+        markedOutline.SetActive(false);
+        flashMarkedRoutine = null;
+    }
+
+    private Coroutine flashEyeRoutine;
+
+    public void FlashEyeOutline(float duration = 2f, float pulseSpeed = 6f)
+    {
+        if (flashEyeRoutine != null)
+            StopCoroutine(flashEyeRoutine);
+        flashEyeRoutine = StartCoroutine(DoFlashEyeOutline(duration, pulseSpeed));
+    }
+
+    private IEnumerator DoFlashEyeOutline(float duration, float pulseSpeed)
+    {
+        if (eyeOutline == null)
+            yield break;
+
+        eyeOutline.SetActive(true);
+
+        Image outlineImg = eyeOutline.GetComponent<Image>();
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            if (outlineImg != null)
+            {
+                float alpha = Mathf.Abs(Mathf.Sin(elapsed * pulseSpeed));
+                Color c = outlineImg.color;
+                c.a = alpha;
+                outlineImg.color = c;
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        if (outlineImg != null)
+        {
+            Color c = outlineImg.color;
+            c.a = 0f;
+            outlineImg.color = c;
+        }
+        eyeOutline.SetActive(false);
+        flashEyeRoutine = null;
+    }
+
 }
