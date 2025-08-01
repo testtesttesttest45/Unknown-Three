@@ -138,20 +138,23 @@ public class King : NetworkBehaviour
         }
 
 
-        var newCardObj = GameObject.Instantiate(
+        var newCardObj = Instantiate(
             GamePlayManager.instance._cardPrefab,
             GamePlayManager.instance.cardDeckTransform.position,
             Quaternion.identity,
             player.cardsPanel.transform.parent);
-        Card newCard = newCardObj.GetComponent<Card>();
-        newCard.Type = refillCard.Type;
-        newCard.Value = refillCard.Value;
-        newCard.IsOpen = false;
-        newCard.CalcPoint();
+                Card newCard = newCardObj.GetComponent<Card>();
+                newCard.Type = refillCard.Type;
+                newCard.Value = refillCard.Value;
+                newCard.IsOpen = false;
+                newCard.CalcPoint();
 
         GamePlayManager.instance.StartCoroutine(
             KingAnimateDeckToHandSlotAndInsert(player, cardIndex, newCard, toPos, toZRot, 0.3f)
         );
+
+        if (GamePlayManager.instance.draw_card_clip != null && GamePlayManager.instance._audioSource != null)
+            GamePlayManager.instance._audioSource.PlayOneShot(GamePlayManager.instance.draw_card_clip, 0.9f);
 
         GamePlayManager.instance.UpdateDeckVisualClientRpc(newDeck);
     }

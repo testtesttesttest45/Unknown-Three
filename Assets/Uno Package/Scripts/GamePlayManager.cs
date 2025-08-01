@@ -69,6 +69,16 @@ public class GamePlayManager : NetworkBehaviour
     public bool hasPeekedCard = false;
     public Dictionary<ulong, SerializableCard> peekedCardsByClientId = new Dictionary<ulong, SerializableCard>();
 
+    [Header("Special Card Audio")]
+    public AudioClip jackVoiceClip;
+    public AudioClip queenVoiceClip;
+    public AudioClip kingVoiceClip;
+    public AudioClip fiendVoiceClip;
+
+    public AudioSource _audioSource;
+
+    private HashSet<ulong> readyClientIds = new HashSet<ulong>();
+
     public CardType CurrentType
     {
         get { return _currentType; }
@@ -100,6 +110,10 @@ public class GamePlayManager : NetworkBehaviour
         instance = this;
         Input.multiTouchEnabled = false;
         previousPlayerIndex = -1;
+
+        _audioSource = GetComponent<AudioSource>();
+        if (_audioSource == null)
+            _audioSource = gameObject.AddComponent<AudioSource>();
     }
 
     public override void OnNetworkSpawn()
@@ -107,12 +121,23 @@ public class GamePlayManager : NetworkBehaviour
         Debug.Log("[GamePlayManager] OnNetworkSpawn! Safe to set up player panels.");
         SetupAllPlayerPanels();
 
-        if (IsHost)
+        // Clients always notify host they are ready
+        if (!IsHost)
+            NotifyReadyServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void NotifyReadyServerRpc(ServerRpcParams rpcParams = default)
+    {
+        ulong senderId = rpcParams.Receive.SenderClientId;
+        readyClientIds.Add(senderId);
+
+        // All players ready? Start game!
+        if (readyClientIds.Count == MultiplayerManager.Instance.playerDataNetworkList.Count)
         {
             StartMultiplayerGame();
         }
     }
-
 
     void OnEnable()
     {
@@ -203,7 +228,13 @@ public class GamePlayManager : NetworkBehaviour
         {
             ulong targetClientId = clientIds[globalSeat];
             int localSeat = MapClientIdToLocalSeat(targetClientId);
-            if (localSeat < 0 || localSeat >= players.Count) continue;
+
+            // Defensive check!
+            if (localSeat < 0 || localSeat >= players.Count)
+            {
+                Debug.LogError($"[DealCardsClientRpc] Skipping invalid seat: localSeat={localSeat}, players.Count={players.Count}");
+                continue;
+            }
 
             var hand = new List<SerializableCard>();
             for (int c = 0; c < cardsPerPlayer; c++)
@@ -211,6 +242,7 @@ public class GamePlayManager : NetworkBehaviour
 
             AssignHandToSeat(localSeat, hand);
         }
+
 
 
         for (int seat = 0; seat < playerCount; seat++)
@@ -388,6 +420,7 @@ public class GamePlayManager : NetworkBehaviour
         for (int i = 0; i < myCards.Count; i++)
         {
             var card = myCards[i];
+            if (card == null) continue;
             card.IsOpen = false;
             card.IsClickable = false;
             card.PeekMode = false;
@@ -514,6 +547,13 @@ public class GamePlayManager : NetworkBehaviour
             }
             turnTimeoutCoroutine = StartCoroutine(HostTurnTimeoutRoutine());
         }
+    }
+
+    [ClientRpc]
+    public void PlayDrawCardSoundClientRpc()
+    {
+        if (_audioSource != null && draw_card_clip != null)
+            _audioSource.PlayOneShot(draw_card_clip);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -996,7 +1036,7 @@ public class GamePlayManager : NetworkBehaviour
                 King.Instance.StartKingPhase();
             }
         }
-        else if (discardValue == CardValue.Fiend || discardValue == CardValue.Ten || discardValue == CardValue.Nine || discardValue == CardValue.Ten || discardValue == CardValue.Eight)
+        else if (discardValue == CardValue.Fiend)
         {
             arrowObject.SetActive(false);
             UpdateDeckClickability();
@@ -1077,6 +1117,11 @@ public class GamePlayManager : NetworkBehaviour
 
         wasteCards.Add(drawn);
 
+        if (drawn.Value == CardValue.Jack || drawn.Value == CardValue.Queen || drawn.Value == CardValue.King || drawn.Value == CardValue.Fiend)
+        {
+            PlaySpecialCardVoiceClientRpc((int)drawn.Value);
+        }
+
         DiscardPeekedCardWithVisualClientRpc(playerIndex, drawn, cards.ToArray(), wasteCards.ToArray());
 
         if (discardValue == CardValue.Jack)
@@ -1127,7 +1172,7 @@ public class GamePlayManager : NetworkBehaviour
             );
             return;
         }
-        else if (discardValue == CardValue.Fiend || discardValue == CardValue.Ten || discardValue == CardValue.Nine || discardValue == CardValue.Eight)
+        else if (discardValue == CardValue.Fiend)
         {
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
             if (IsHost)
@@ -1156,6 +1201,26 @@ public class GamePlayManager : NetworkBehaviour
         else
             EndTurnForAllClientRpc();
     }
+
+    [ClientRpc]
+    void PlaySpecialCardVoiceClientRpc(int cardValue)
+    {
+        if (_audioSource == null) return;
+        AudioClip clip = null;
+        switch ((CardValue)cardValue)
+        {
+            case CardValue.Jack: clip = jackVoiceClip; break;
+            case CardValue.Queen: clip = queenVoiceClip; break;
+            case CardValue.King: clip = kingVoiceClip; break;
+            case CardValue.Fiend: clip = fiendVoiceClip; break;
+        }
+        if (clip != null)
+        {
+            _audioSource.volume = 0.4f;
+            _audioSource.PlayOneShot(clip);
+        }
+    }
+
 
     [ClientRpc]
     void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
@@ -1232,6 +1297,11 @@ public class GamePlayManager : NetworkBehaviour
             card.transform.SetAsLastSibling();
             card.transform.localPosition = Vector3.zero;
             RefreshWasteInteractivity();
+
+            if (IsServer)
+            {
+                PlayDrawCardSoundClientRpc();
+            }
         }
 
     }
@@ -1320,10 +1390,8 @@ public class GamePlayManager : NetworkBehaviour
         newCardVisual.IsOpen = p.isUserPlayer;
         newCardVisual.CalcPoint();
 
-        // *** Immediately update deck visual, so the card vanishes from deck ***
         UpdateDeckVisualClientRpc(deck);
 
-        // Animate movement
         StartCoroutine(AnimateHandCardReplace(
             p, handIndex, newCardVisual, newCardGO, fromPos, handSlotPos, 0.5f, playerIndex
         ));
@@ -1335,23 +1403,21 @@ public class GamePlayManager : NetworkBehaviour
     IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
     Vector3 fromPos, Vector3 handSlotPos, float animDuration, int playerIndex)
     {
-        // Animate new card moving in
         yield return StartCoroutine(AnimateCardMove(newCardVisual, fromPos, handSlotPos, animDuration));
-        Destroy(newCardGO, 0.01f); // Remove temp anim object (if you used a dummy for movement)
+        Destroy(newCardGO, 0.01f);
 
-        // Add real card into the hand slot (creates the GameObject in slot and saves reference)
         p.AddSerializableCard(new SerializableCard(newCardVisual.Type, newCardVisual.Value), handIndex);
 
-        // Wait a frame so AddSerializableCard has set the reference
         yield return null;
 
-        // Flash the new card in the hand
+        if (IsServer)
+            PlayDrawCardSoundClientRpc();
+
         Card c = p.cardsPanel.cards[handIndex];
         if (c != null)
             c.FlashMarkedOutline();
 
-        // Wait for the flash effect duration
-        float flashDuration = 2f; // set to your FlashMarkedOutline duration!
+        float flashDuration = 2f;
         yield return new WaitForSeconds(flashDuration);
 
         // Only host advances turn after flash

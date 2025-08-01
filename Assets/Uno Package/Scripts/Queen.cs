@@ -183,6 +183,9 @@ public class Queen : NetworkBehaviour
         cardA.transform.position = posB;
         cardB.transform.position = posA;
 
+        if (GamePlayManager.instance.draw_card_clip != null && GamePlayManager.instance._audioSource != null)
+            GamePlayManager.instance._audioSource.PlayOneShot(GamePlayManager.instance.draw_card_clip, 0.9f);
+
         cardA.transform.localRotation = Quaternion.identity;
         cardA.transform.localScale = Vector3.one;
         cardB.transform.localRotation = Quaternion.identity;
@@ -194,14 +197,11 @@ public class Queen : NetworkBehaviour
         panelA.UpdatePos();
         panelB.UpdatePos();
 
-        // --- NEW: Flash both cards ---
         cardA.FlashMarkedOutline();
         cardB.FlashMarkedOutline();
 
-        // Wait for flash to finish (set to your effect's duration, e.g. 2f)
         yield return new WaitForSeconds(2f);
 
-        // --- Host advances turn after flash ---
         if (NetworkManager.Singleton.IsHost)
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }

@@ -464,9 +464,8 @@ public class MultiplayerManager : NetworkBehaviour
             }
         }
 
-        // Even player count? 2? 4?
         int totalPlayers = playerDataNetworkList.Count;
-        bool validPlayerCount = (totalPlayers == 2 || totalPlayers == 4);
+        bool validPlayerCount = (totalPlayers == 4);
 
         if (allReady && validPlayerCount)
         {

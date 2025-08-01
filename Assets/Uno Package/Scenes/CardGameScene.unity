@@ -5427,7 +5427,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &129262519
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5701,6 +5701,10 @@ MonoBehaviour:
   isKingRefillPhase: 0
   peekedCard: {fileID: 0}
   hasPeekedCard: 0
+  jackVoiceClip: {fileID: 8300000, guid: 9b72dc28c07334848a8411fb9b8a3bcf, type: 3}
+  queenVoiceClip: {fileID: 8300000, guid: 8fc9b8111cee9ec40830c36417e25ee3, type: 3}
+  kingVoiceClip: {fileID: 8300000, guid: 8e8dd2463188d734c8924ff326dc6285, type: 3}
+  fiendVoiceClip: {fileID: 8300000, guid: b63e6bf01e1c7434cacf9d4eb6afa7d7, type: 3}
   _currentType: 0
   _currentValue: 0
 --- !u!114 &144639355
@@ -8402,7 +8406,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &610732503
 RectTransform:
   m_ObjectHideFlags: 0
@@ -9001,7 +9005,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &711634826
 RectTransform:
   m_ObjectHideFlags: 0
@@ -10433,7 +10437,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1027432572
 RectTransform:
   m_ObjectHideFlags: 0
@@ -17990,6 +17994,7 @@ MonoBehaviour:
   avatarPanel: {fileID: 1776483099}
   playerRowPrefab: {fileID: 8768907234594108026, guid: 0c920f6aa3a1b8441bc11f960d7d5929,
     type: 3}
+  swapCardClip: {fileID: 8300000, guid: e00380d5b3a2cc249b596fa6c8c1e017, type: 3}
 --- !u!4 &1541427275
 Transform:
   m_ObjectHideFlags: 0

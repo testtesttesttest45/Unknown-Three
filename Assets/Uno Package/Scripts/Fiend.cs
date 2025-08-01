@@ -12,8 +12,17 @@ public class Fiend : NetworkBehaviour
     public GameObject fiendPopup;
     public Transform avatarPanel;
     public GameObject playerRowPrefab;
+    [Header("Audio")]
+    private AudioSource _audioSource;
+    public AudioClip swapCardClip;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        _audioSource = GetComponent<AudioSource>();
+        if (_audioSource == null)
+            _audioSource = gameObject.AddComponent<AudioSource>();
+    }
 
     public void ShowFiendPopup()
     {
@@ -53,12 +62,12 @@ public class Fiend : NetworkBehaviour
         }
     }
 
-
     private void OnOpponentSelected(int targetSeat)
     {
         fiendPopup.SetActive(false);
         RequestJumbleHandServerRpc(targetSeat);
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     private void RequestJumbleHandServerRpc(int seatIndex, ServerRpcParams rpcParams = default)
@@ -153,6 +162,8 @@ public class Fiend : NetworkBehaviour
             hand[a] = hand[b];
             hand[b] = temp;
 
+            if (swapCardClip != null && _audioSource != null)
+                _audioSource.PlayOneShot(swapCardClip);
             timer += swapAnim;
         }
 
