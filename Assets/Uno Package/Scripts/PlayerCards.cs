@@ -63,7 +63,6 @@ public class PlayerCards : MonoBehaviour
             }
             cards[i] = null;
         }
-        // Ensure exactly 3 slots
         if (cards.Count < 3)
             for (int i = cards.Count; i < 3; i++)
                 cards.Add(null);

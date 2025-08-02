@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -79,6 +80,10 @@ public class GamePlayManager : NetworkBehaviour
 
     private HashSet<ulong> readyClientIds = new HashSet<ulong>();
 
+    public WinnerUI winnerUI;
+    public bool isGameOverPending = false;
+    public bool isSpecialAbilityActive = false;
+
     public CardType CurrentType
     {
         get { return _currentType; }
@@ -132,7 +137,6 @@ public class GamePlayManager : NetworkBehaviour
         ulong senderId = rpcParams.Receive.SenderClientId;
         readyClientIds.Add(senderId);
 
-        // All players ready? Start game!
         if (readyClientIds.Count == MultiplayerManager.Instance.playerDataNetworkList.Count)
         {
             StartMultiplayerGame();
@@ -185,6 +189,7 @@ public class GamePlayManager : NetworkBehaviour
 
     public void StartMultiplayerGame()
     {
+        Debug.Log($"[StartMultiplayerGame] Deck has {cards.Count} cards before dealing.");
         menuButton.SetActive(true);
         if (cardDeckTransform != null)
             cardDeckTransform.gameObject.SetActive(true);
@@ -222,12 +227,12 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
-        // Final assertion to catch any impossible bugs
         for (int i = 0; i < allCards.Length; i++)
         {
             if (IsCardDefault(allCards[i]))
                 Debug.LogError($"[ASSERT] allCards[{i}] is default! This will cause missing cards.");
         }
+        
 
         DealCardsClientRpc(clientIds, allCards, cardsPerPlayer, playerCount);
 
@@ -243,7 +248,6 @@ public class GamePlayManager : NetworkBehaviour
             ulong targetClientId = clientIds[globalSeat];
             int localSeat = MapClientIdToLocalSeat(targetClientId);
 
-            // Defensive check!
             if (localSeat < 0 || localSeat >= players.Count)
             {
                 Debug.LogError($"[DealCardsClientRpc] Skipping invalid seat: localSeat={localSeat}, players.Count={players.Count}");
@@ -257,8 +261,6 @@ public class GamePlayManager : NetworkBehaviour
             AssignHandToSeat(localSeat, hand);
         }
 
-
-
         for (int seat = 0; seat < playerCount; seat++)
             players[seat].cardsPanel.UpdatePos();
 
@@ -270,7 +272,6 @@ public class GamePlayManager : NetworkBehaviour
         var player = players[localSeat];
         player.cardsPanel.Clear();
 
-        // Always 3 slots for a 3-card hand!
         for (int j = 0; j < 3; j++)
         {
             Card card = null;
@@ -357,10 +358,10 @@ public class GamePlayManager : NetworkBehaviour
             foreach (var val in values)
             {
                 var card = new SerializableCard((CardType)j, val);
-                // Debug.Log($"CreateDeck: Added {card.Type}, {card.Value}");
                 cards.Add(card);
             }
         }
+        Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
     }
 
     private IEnumerator StartPeekingPhase()
@@ -509,6 +510,9 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.SetActive(false);
         arrowObject.SetActive(false);
 
+        if (Fiend.Instance != null)
+            Fiend.Instance.HideFiendPopup();
+
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
 
         if (previousPlayerIndex >= 0 && previousPlayerIndex < players.Count)
@@ -539,7 +543,6 @@ public class GamePlayManager : NetworkBehaviour
 
         RefreshWasteInteractivity();
 
-
         if (IsHost)
         {
             if (turnTimeoutCoroutine != null)
@@ -550,6 +553,7 @@ public class GamePlayManager : NetworkBehaviour
             turnTimeoutCoroutine = StartCoroutine(HostTurnTimeoutRoutine());
         }
     }
+
 
     [ClientRpc]
     public void PlayDrawCardSoundClientRpc()
@@ -595,7 +599,6 @@ public class GamePlayManager : NetworkBehaviour
             Destroy(top.gameObject);
     }
 
-
     private void EndTurnAndGoNextPlayer()
     {
         if (isTurnEnding) return;
@@ -609,6 +612,8 @@ public class GamePlayManager : NetworkBehaviour
 
         CurrentPlayer.OnTurnEnd();
         EndTurnForAllClientRpc();
+
+
 
         if (IsHost)
         {
@@ -628,7 +633,6 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
     }
-
 
     void OnJackCardDiscardedByMe()
     {
@@ -705,7 +709,6 @@ public class GamePlayManager : NetworkBehaviour
                 }
             }
         );
-        // After RevealHandCardClientRpc (sent only to revealer)
         List<ulong> others = new List<ulong>();
         foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
             if (pd.clientId != jackUserClientId)
@@ -732,8 +735,6 @@ public class GamePlayManager : NetworkBehaviour
         if (IsHost)
             StartCoroutine(DelayedNextPlayerTurn(2.0f));
     }
-
-
 
     private void ResetAndRestartTurnTimerCoroutine()
     {
@@ -1306,7 +1307,16 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
+        if (IsHost && cards.Count == 0)
+        {
+            unoBtn.SetActive(false);
+            arrowObject.SetActive(false);
+            yield return new WaitForSeconds(1.5f);
+            TryShowGameOver();
+            yield break;
+        }
     }
+
 
     public void OnHandCardReplaceRequested(int handIndex)
     {
@@ -1421,6 +1431,16 @@ public class GamePlayManager : NetworkBehaviour
         float flashDuration = 2f;
         yield return new WaitForSeconds(flashDuration);
 
+        if (IsHost && cards.Count == 0)
+        {
+            unoBtn.SetActive(false);
+            arrowObject.SetActive(false);
+
+            yield return new WaitForSeconds(1.5f);
+            TryShowGameOver();
+            yield break;
+        }
+
         // Only host advances turn after flash
         if (IsHost)
             StartCoroutine(DelayedNextPlayerTurn(0f));
@@ -1477,8 +1497,6 @@ public class GamePlayManager : NetworkBehaviour
         SerializableCard serializableDiscard = new SerializableCard(c.Type, c.Value);
         wasteCards.Add(serializableDiscard);
 
-
-
         if (p != null)
         {
             if (p.cardsPanel.cards.Count == 0)
@@ -1488,6 +1506,72 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
     }
+
+    public void SetupGameOver()
+    {
+        gameOver = true;
+        for (int i = players.Count - 1; i >= 0; i--)
+        {
+            if (!players[i].isInRoom)
+                players.RemoveAt(i);
+        }
+
+        // Sort and build result array
+        List<Player2> sorted = new List<Player2>(players);
+        sorted.Sort((a, b) => a.GetTotalPoints().CompareTo(b.GetTotalPoints()));
+
+        WinnerResultData[] results = new WinnerResultData[sorted.Count];
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            results[i] = new WinnerResultData
+            {
+                playerName = sorted[i].playerName,
+                avatarIndex = sorted[i].avatarIndex,
+                totalPoints = sorted[i].GetTotalPoints(),
+                isUserPlayer = sorted[i].isUserPlayer,
+                cards = sorted[i].cardsPanel.cards
+                    .Where(c => c != null)
+                    .Select(c => new SerializableCard(c.Type, c.Value))
+                    .ToArray()
+            };
+        }
+
+
+        ShowGameOverClientRpc();
+
+        ShowWinnerResultDataClientRpc(results);
+
+        if (winnerUI != null)
+            winnerUI.ShowWinnersFromNetwork(results);
+    }
+
+    public void TryShowGameOver()
+    {
+        if (isSpecialAbilityActive)
+        {
+            isGameOverPending = true;
+            return;
+        }
+        SetupGameOver();
+        isGameOverPending = false;
+    }
+
+    [ClientRpc]
+    void ShowGameOverClientRpc()
+    {
+        if (screenCanvas != null)
+            screenCanvas.SetActive(false);
+        if (gameOverPopup != null)
+            gameOverPopup.SetActive(true);
+    }
+
+    [ClientRpc]
+    public void ShowWinnerResultDataClientRpc(WinnerResultData[] data)
+    {
+        if (winnerUI != null)
+            winnerUI.ShowWinnersFromNetwork(data);
+    }
+
 
     private int Mod(int x, int m)
     {
@@ -1507,75 +1591,6 @@ public class GamePlayManager : NetworkBehaviour
         CardGameManager.PlaySound(uno_btn_clip);
     }
 
-    public void SetupGameOver()
-    {
-        gameOver = true;
-        for (int i = players.Count - 1; i >= 0; i--)
-        {
-            if (!players[i].isInRoom)
-            {
-                players.RemoveAt(i);
-            }
-        }
-
-        if (players.Count == 2)
-        {
-            playerObject[0].SetActive(true);
-            playerObject[2].SetActive(true);
-            playerObject[2].transform.GetChild(2).GetComponent<Text>().text = "2nd Place";
-            playerObject.RemoveAt(3);
-            playerObject.RemoveAt(1);
-
-        }
-        else if (players.Count == 3)
-        {
-            playerObject.RemoveAt(2);
-            for (int i = 0; i < 3; i++)
-            {
-                playerObject[i].SetActive(true);
-            }
-            playerObject[2].transform.GetChild(2).GetComponent<Text>().text = "3rd Place";
-
-        }
-        else
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                playerObject[i].SetActive(true);
-            }
-        }
-
-        players.Sort((x, y) => x.GetTotalPoints().CompareTo(y.GetTotalPoints()));
-        var winner = players[0];
-
-        starParticle.gameObject.SetActive(winner.isUserPlayer);
-        playerObject[0].GetComponentsInChildren<Image>()[1].sprite = winner.avatarImage.sprite;
-
-        for (int i = 1; i < playerObject.Count; i++)
-        {
-            var playerNameText = playerObject[i].GetComponentInChildren<Text>();
-            playerNameText.text = players[i].playerName;
-            playerNameText.GetComponent<EllipsisText>().UpdateText();
-            playerObject[i].GetComponentsInChildren<Image>()[1].sprite = players[i].avatarImage.sprite;
-        }
-
-        CardGameManager.PlaySound(winner.isUserPlayer ? music_win_clip : music_loss_clip);
-        gameOverPopup.SetActive(true);
-        screenCanvas.SetActive(false);
-
-        for (int i = 1; i < players.Count; i++)
-        {
-            if (players[i].isUserPlayer)
-            {
-                loseTimerAnimation.SetActive(true);
-                loseTimerAnimation.transform.position = playerObject[i].transform.position;
-                break;
-            }
-        }
-
-        gameOverPopup.GetComponentInChildren<Text>().text = winner.isUserPlayer ? "You win Game." : "You Lost Game ...   Try Again.";
-        fastForwardTime = 0;
-    }
 
     public void FreezeTimerUI()
     {

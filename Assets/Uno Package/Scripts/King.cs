@@ -1,6 +1,7 @@
 using System.Collections;
-using UnityEngine;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Netcode;
+using UnityEngine;
 
 public class King : NetworkBehaviour
 {
@@ -10,6 +11,8 @@ public class King : NetworkBehaviour
     private Card selectedCard = null;
     private int selectedLocalSeat = -1;
     private int selectedCardIndex = -1;
+    private Vector3 lastKilledCardPos;
+    private float lastKilledCardZRot;
 
     void Awake() => Instance = this;
 
@@ -121,33 +124,21 @@ public class King : NetworkBehaviour
         int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat);
         var player = GamePlayManager.instance.players[localSeat];
 
-        Vector3 toPos;
-        float toZRot;
-
-        if (player.cardsPanel.cards.Count > cardIndex &&
-            player.cardsPanel.cards[cardIndex] == null &&
-            player.cardsPanel.transform.childCount > cardIndex)
-        {
-            toPos = player.cardsPanel.transform.GetChild(cardIndex).position;
-            toZRot = player.cardsPanel.transform.GetChild(cardIndex).rotation.eulerAngles.z;
-        }
-        else
-        {
-            toPos = player.cardsPanel.transform.position;
-            toZRot = 0f;
-        }
-
+        // Use the stored position and rotation
+        Vector3 toPos = lastKilledCardPos;
+        float toZRot = lastKilledCardZRot;
 
         var newCardObj = Instantiate(
             GamePlayManager.instance._cardPrefab,
             GamePlayManager.instance.cardDeckTransform.position,
             Quaternion.identity,
             player.cardsPanel.transform.parent);
-                Card newCard = newCardObj.GetComponent<Card>();
-                newCard.Type = refillCard.Type;
-                newCard.Value = refillCard.Value;
-                newCard.IsOpen = false;
-                newCard.CalcPoint();
+
+        Card newCard = newCardObj.GetComponent<Card>();
+        newCard.Type = refillCard.Type;
+        newCard.Value = refillCard.Value;
+        newCard.IsOpen = false;
+        newCard.CalcPoint();
 
         GamePlayManager.instance.StartCoroutine(
             KingAnimateDeckToHandSlotAndInsert(player, cardIndex, newCard, toPos, toZRot, 0.3f)
@@ -158,6 +149,7 @@ public class King : NetworkBehaviour
 
         GamePlayManager.instance.UpdateDeckVisualClientRpc(newDeck);
     }
+
 
     private static IEnumerator KingAnimateDeckToHandSlotAndInsert(Player2 player, int handIndex, Card card, Vector3 toPos, float toZRot, float duration)
     {
@@ -186,10 +178,18 @@ public class King : NetworkBehaviour
         float flashDuration = 2.0f;
         yield return new WaitForSeconds(flashDuration);
 
+        if (GamePlayManager.instance.IsHost && GamePlayManager.instance.cards.Count == 0)
+        {
+            GamePlayManager.instance.unoBtn.SetActive(false);
+            GamePlayManager.instance.arrowObject.SetActive(false);
+            yield return new WaitForSeconds(1.5f);
+            GamePlayManager.instance.SetupGameOver();
+            yield break;
+        }
+
         if (NetworkManager.Singleton.IsHost)
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }
-
 
     [ClientRpc]
     private void KingKillCardClientRpc(int globalSeat, int cardIndex)
@@ -198,13 +198,14 @@ public class King : NetworkBehaviour
         var player = GamePlayManager.instance.players[localSeat];
         Card killed = player.cardsPanel.cards[cardIndex];
 
-        Vector3 fromPos = killed.transform.position;
-        float fromZRot = killed.transform.rotation.eulerAngles.z;
+        // Store the slot position/rotation before removing
+        lastKilledCardPos = killed.transform.position;
+        lastKilledCardZRot = killed.transform.rotation.eulerAngles.z;
 
         var wasteObj = GameObject.Instantiate(
             GamePlayManager.instance._cardPrefab,
-            fromPos,
-            Quaternion.Euler(0, 0, fromZRot),
+            lastKilledCardPos,
+            Quaternion.Euler(0, 0, lastKilledCardZRot),
             GamePlayManager.instance.cardWastePile.transform.parent);
 
         wasteObj.Type = killed.Type;
@@ -215,21 +216,17 @@ public class King : NetworkBehaviour
 
         wasteObj.ShowKilledOutline(true);
 
-        // Prevent interaction with this waste card
         wasteObj.IsClickable = false;
         wasteObj.onClick = null;
 
         float randomRot = Random.Range(-50, 50f);
         GamePlayManager.instance.StartCoroutine(
             GamePlayManager.instance.AnimateCardMove(
-                wasteObj, fromPos, GamePlayManager.instance.cardWastePile.transform.position, 0.3f, randomRot
+                wasteObj, lastKilledCardPos, GamePlayManager.instance.cardWastePile.transform.position, 0.3f, randomRot
             ));
-
 
         player.RemoveCard(killed, false);
     }
-
-
 
 
 }

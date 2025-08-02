@@ -119,6 +119,10 @@ public class Fiend : NetworkBehaviour
             // After jumble, host proceeds to next turn
             if (IsHost && NetworkManager.Singleton.IsServer)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+
+            GamePlayManager.instance.isSpecialAbilityActive = false;
+            if (GamePlayManager.instance.isGameOverPending)
+                GamePlayManager.instance.TryShowGameOver();
         }));
     }
 
@@ -187,4 +191,11 @@ public class Fiend : NetworkBehaviour
 
         onComplete?.Invoke();
     }
+
+    public void HideFiendPopup()
+    {
+        GamePlayManager.instance.isSpecialAbilityActive = true;
+        fiendPopup.SetActive(false);
+    }
+
 }

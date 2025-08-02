@@ -9,6 +9,7 @@ public class Player2 : MonoBehaviour
     public GameObject CardPanelBG;
     public PlayerCards cardsPanel;
     public string playerName;
+    public int avatarIndex;
     public bool isUserPlayer;
     public Image avatarImage;
     public Text avatarName;
@@ -28,6 +29,7 @@ public class Player2 : MonoBehaviour
     public void SetAvatarProfile(AvatarProfile p)
     {
         playerName = p.avatarName;
+        avatarIndex = p.avatarIndex;
         if (avatarName != null)
         {
             avatarName.text = p.avatarName;
@@ -187,15 +189,18 @@ public class Player2 : MonoBehaviour
 
     public int GetTotalPoints()
     {
-        int total = 0;
-        foreach(var c in cardsPanel.cards)
+        int points = 0;
+        foreach (var c in cardsPanel.cards)
         {
-            total += c.point;
+            if (c == null) continue;
+            if (c.Value >= CardValue.Zero && c.Value <= CardValue.Ten)
+                points += (int)c.Value;
+            else // J, Q, K, Fiend, Skip
+                points += 10;
         }
-        return total;
+        return points;
     }
 
-    
 
     public void SetTimerVisible(bool visible)
     {
