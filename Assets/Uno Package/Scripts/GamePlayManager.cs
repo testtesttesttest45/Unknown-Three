@@ -81,8 +81,7 @@ public class GamePlayManager : NetworkBehaviour
     private HashSet<ulong> readyClientIds = new HashSet<ulong>();
 
     public WinnerUI winnerUI;
-    public bool isGameOverPending = false;
-    public bool isSpecialAbilityActive = false;
+    private bool deckEmptyAndWaitForTurnEnd = false;
 
     public CardType CurrentType
     {
@@ -352,7 +351,6 @@ public class GamePlayManager : NetworkBehaviour
         CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
         CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
     };
-
         for (int j = 0; j < 4; j++)
         {
             foreach (var val in values)
@@ -500,6 +498,16 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     public void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
     {
+        if (cards.Count == 0)
+        {
+            if (Fiend.Instance != null)
+                Fiend.Instance.HideFiendPopup();
+            // if there are glowing cards, disable them
+            DisableAllHandCardGlowAllPlayers();
+            if (IsHost)
+                StartCoroutine(ShowGameOverAfterDelay(1.5f));
+            return;
+        }
         isTurnEnding = false;
         isJackRevealPhase = false;
         ulong curClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
@@ -510,8 +518,7 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.SetActive(false);
         arrowObject.SetActive(false);
 
-        if (Fiend.Instance != null)
-            Fiend.Instance.HideFiendPopup();
+        
 
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
 
@@ -554,6 +561,11 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+    private IEnumerator ShowGameOverAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        SetupGameOver();
+    }
 
     [ClientRpc]
     public void PlayDrawCardSoundClientRpc()
@@ -1032,12 +1044,6 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject.SetActive(false);
             UpdateDeckClickability();
             ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
-            if (players[0].isUserPlayer)
-            {
-                players[0].SetTimerVisible(true);
-                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-                King.Instance.StartKingPhase();
-            }
         }
         else if (discardValue == CardValue.Fiend)
         {
@@ -1161,8 +1167,22 @@ public class GamePlayManager : NetworkBehaviour
         }
         else if (discardValue == CardValue.King)
         {
-            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
+            if (turnTimeoutCoroutine != null)
+            {
+                StopCoroutine(turnTimeoutCoroutine);
+                turnTimeoutCoroutine = null;
+            }
+            FreezeTimerUI();
 
+            if (cards.Count == 0)
+            {
+                // Powerless King: just a normal discard, no timer reset
+                StartCoroutine(DelayedNextPlayerTurn(1.0f));
+                return;
+            }
+
+            // Otherwise, do King phase as usual (reset timer, etc)
+            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
             if (IsHost)
                 ResetAndRestartTurnTimerCoroutine();
 
@@ -1175,6 +1195,9 @@ public class GamePlayManager : NetworkBehaviour
             );
             return;
         }
+
+
+
         else if (discardValue == CardValue.Fiend)
         {
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
@@ -1223,7 +1246,6 @@ public class GamePlayManager : NetworkBehaviour
             _audioSource.PlayOneShot(clip);
         }
     }
-
 
     [ClientRpc]
     void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
@@ -1311,9 +1333,6 @@ public class GamePlayManager : NetworkBehaviour
         {
             unoBtn.SetActive(false);
             arrowObject.SetActive(false);
-            yield return new WaitForSeconds(1.5f);
-            TryShowGameOver();
-            yield break;
         }
     }
 
@@ -1435,10 +1454,6 @@ public class GamePlayManager : NetworkBehaviour
         {
             unoBtn.SetActive(false);
             arrowObject.SetActive(false);
-
-            yield return new WaitForSeconds(1.5f);
-            TryShowGameOver();
-            yield break;
         }
 
         // Only host advances turn after flash
@@ -1536,7 +1551,6 @@ public class GamePlayManager : NetworkBehaviour
             };
         }
 
-
         ShowGameOverClientRpc();
 
         ShowWinnerResultDataClientRpc(results);
@@ -1545,16 +1559,6 @@ public class GamePlayManager : NetworkBehaviour
             winnerUI.ShowWinnersFromNetwork(results);
     }
 
-    public void TryShowGameOver()
-    {
-        if (isSpecialAbilityActive)
-        {
-            isGameOverPending = true;
-            return;
-        }
-        SetupGameOver();
-        isGameOverPending = false;
-    }
 
     [ClientRpc]
     void ShowGameOverClientRpc()

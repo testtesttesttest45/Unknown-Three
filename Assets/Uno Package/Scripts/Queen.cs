@@ -16,7 +16,6 @@ public class Queen : NetworkBehaviour
 
     public void StartQueenSwap()
     {
-        GamePlayManager.instance.isSpecialAbilityActive = true;
         isQueenSwapPhase = true;
         firstCardSelected = null;
         secondCardSelected = null;
@@ -202,12 +201,6 @@ public class Queen : NetworkBehaviour
         cardB.FlashMarkedOutline();
 
         yield return new WaitForSeconds(2f);
-
-        GamePlayManager.instance.isSpecialAbilityActive = false;
-        if (GamePlayManager.instance.isGameOverPending && NetworkManager.Singleton.IsHost)
-        {
-            GamePlayManager.instance.TryShowGameOver();
-        }
 
         if (NetworkManager.Singleton.IsHost)
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));

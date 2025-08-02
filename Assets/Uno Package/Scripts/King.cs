@@ -18,6 +18,10 @@ public class King : NetworkBehaviour
 
     public void StartKingPhase()
     {
+        if (GamePlayManager.instance.cards.Count == 0)
+        {
+            return;
+        }
         isKingPhase = true;
         selectedCard = null;
         selectedLocalSeat = -1;
@@ -182,9 +186,6 @@ public class King : NetworkBehaviour
         {
             GamePlayManager.instance.unoBtn.SetActive(false);
             GamePlayManager.instance.arrowObject.SetActive(false);
-            yield return new WaitForSeconds(1.5f);
-            GamePlayManager.instance.SetupGameOver();
-            yield break;
         }
 
         if (NetworkManager.Singleton.IsHost)
