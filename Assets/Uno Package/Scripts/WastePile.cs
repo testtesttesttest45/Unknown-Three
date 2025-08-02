@@ -53,7 +53,7 @@ public class WastePile : MonoBehaviour
                         !hasPeeked &&
                         isTop;
 
-        Debug.Log($"[WastePile] Waste card {wasteCard.name} - isTop: {isTop}, myTurn: {myTurn}, isUser: {isUser}, hasPeeked: {hasPeeked} → canClick: {canClick}");
+        // Debug.Log($"[WastePile] Waste card {wasteCard.name} - isTop: {isTop}, myTurn: {myTurn}, isUser: {isUser}, hasPeeked: {hasPeeked} → canClick: {canClick}");
 
         wasteCard.IsClickable = canClick;
     }

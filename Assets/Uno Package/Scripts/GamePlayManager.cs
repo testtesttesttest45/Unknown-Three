@@ -200,10 +200,16 @@ public class GamePlayManager : NetworkBehaviour
 
         int cardsPerPlayer = 3;
         int playerCount = players.Count;
+        int needed = playerCount * cardsPerPlayer;
+        if (cards.Count < needed)
+        {
+            Debug.LogError($"[StartMultiplayerGame] Not enough cards in deck! Need {needed}, have {cards.Count}. ABORT DEAL.");
+            return;
+        }
 
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         ulong[] clientIds = new ulong[playerCount];
-        SerializableCard[] allCards = new SerializableCard[playerCount * cardsPerPlayer];
+        SerializableCard[] allCards = new SerializableCard[needed];
 
         for (int playerIdx = 0; playerIdx < playerCount; playerIdx++)
         {
@@ -216,10 +222,18 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
+        // Final assertion to catch any impossible bugs
+        for (int i = 0; i < allCards.Length; i++)
+        {
+            if (IsCardDefault(allCards[i]))
+                Debug.LogError($"[ASSERT] allCards[{i}] is default! This will cause missing cards.");
+        }
+
         DealCardsClientRpc(clientIds, allCards, cardsPerPlayer, playerCount);
 
         UpdateDeckVisualClientRpc(cards.ToArray());
     }
+
 
     [ClientRpc]
     void DealCardsClientRpc(ulong[] clientIds, SerializableCard[] allCardsFlat, int cardsPerPlayer, int playerCount)
@@ -326,46 +340,34 @@ public class GamePlayManager : NetworkBehaviour
             p2.isUserPlayer = (seat == 0);
         }
     }
-    void CreateDeck()
+    public void CreateDeck()
     {
         cards = new List<SerializableCard>();
         wasteCards = new List<SerializableCard>();
 
         List<CardValue> values = new List<CardValue>
     {
-        CardValue.Zero,
-        CardValue.One,
-        CardValue.Two,
-        CardValue.Three,
-        CardValue.Four,
-        CardValue.Five,
-        CardValue.Six,
-        CardValue.Seven,
-        CardValue.Eight,
-        CardValue.Nine,
-        CardValue.Ten,
-        CardValue.Jack,
-        CardValue.Queen,
-        CardValue.King,
-        CardValue.Fiend,
-        CardValue.Skip
+        CardValue.Zero, CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
+        CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
+        CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
     };
 
         for (int j = 0; j < 4; j++)
         {
             foreach (var val in values)
             {
-                cards.Add(new SerializableCard((CardType)j, val));
+                var card = new SerializableCard((CardType)j, val);
+                // Debug.Log($"CreateDeck: Added {card.Type}, {card.Value}");
+                cards.Add(card);
             }
         }
-
     }
 
     private IEnumerator StartPeekingPhase()
     {
         isPeekingPhase = true;
 
-        float peekTime = 3f;
+        float peekTime = 4f;
         int localPlayerIndex = 0;
         var myCards = players[localPlayerIndex].cardsPanel.cards;
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
@@ -1399,7 +1401,6 @@ public class GamePlayManager : NetworkBehaviour
         OnUnoClick();
     }
 
-
     IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
     Vector3 fromPos, Vector3 handSlotPos, float animDuration, int playerIndex)
     {
@@ -1426,13 +1427,11 @@ public class GamePlayManager : NetworkBehaviour
 
     }
 
-
-
-
     void DisableAllHandCardGlow()
     {
         foreach (var card in players[0].cardsPanel.cards)
         {
+            if (card == null) continue;
             card.ShowGlow(false);
             card.IsClickable = false;
             card.onClick = null;
@@ -1461,8 +1460,6 @@ public class GamePlayManager : NetworkBehaviour
         StartCoroutine(AnimateCardMove(discard, cardDeckTransform.position, cardWastePile.transform.position, 0.3f, randomRot));
         OnUnoClick();
     }
-
-
 
     public void PutCardToWastePile(Card c, Player2 p = null)
     {
@@ -1578,70 +1575,6 @@ public class GamePlayManager : NetworkBehaviour
 
         gameOverPopup.GetComponentInChildren<Text>().text = winner.isUserPlayer ? "You win Game." : "You Lost Game ...   Try Again.";
         fastForwardTime = 0;
-    }
-
-    IEnumerator CheckNetwork()
-    {
-        while (true)
-        {
-            WWW www = new WWW("https://www.google.com");
-            yield return www;
-            if (string.IsNullOrEmpty(www.error))
-            {
-                if (noNetwork.isOpen)
-                {
-                    noNetwork.HidePopup();
-
-                    Time.timeScale = 1;
-                    OnApplicationPause(false);
-                }
-            }
-            else
-            {
-                if (Time.timeScale == 1)
-                {
-                    noNetwork.ShowPopup();
-
-                    Time.timeScale = 0;
-                    pauseTime = System.DateTime.Now;
-                }
-            }
-
-            yield return new WaitForSecondsRealtime(1f);
-        }
-    }
-
-    void OnApplicationPause(bool pauseStatus)
-    {
-        if (pauseStatus)
-        {
-            pauseTime = System.DateTime.Now;
-        }
-        else
-        {
-            if (CardGameManager.currentGameMode == GameMode.MultiPlayer && multiplayerLoaded && !gameOver)
-            {
-                fastForwardTime += Mathf.Clamp((int)(System.DateTime.Now - pauseTime).TotalSeconds, 0, 3600);
-                if (Time.timeScale == 1f)
-                {
-                    StartCoroutine(DoFastForward());
-                }
-            }
-        }
-    }
-
-    IEnumerator DoFastForward()
-    {
-        Time.timeScale = 10f;
-        rayCastBlocker.SetActive(true);
-        while (fastForwardTime > 0)
-        {
-            yield return new WaitForSeconds(1f);
-            fastForwardTime--;
-        }
-        Time.timeScale = 1f;
-        rayCastBlocker.SetActive(false);
-
     }
 
     public void FreezeTimerUI()
