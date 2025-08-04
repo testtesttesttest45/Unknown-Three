@@ -229,5 +229,43 @@ public class King : NetworkBehaviour
         player.RemoveCard(killed, false);
     }
 
+    public void StartBotKingPhase(ulong botClientId)
+    {
+        var gpm = GamePlayManager.instance;
+        var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
+
+        for (int seat = 0; seat < gpm.players.Count; seat++)
+        {
+            var player = gpm.players[seat];
+            for (int cardIdx = 0; cardIdx < player.cardsPanel.cards.Count; cardIdx++)
+            {
+                if (player.cardsPanel.cards[cardIdx] != null)
+                {
+                    candidates.Add((seat, cardIdx));
+                }
+            }
+        }
+        if (candidates.Count == 0) return; // Safety
+
+        var choice = candidates[Random.Range(0, candidates.Count)];
+
+        // Use local positions (since this runs on host, it's fine)
+        var card = gpm.players[choice.seat].cardsPanel.cards[choice.cardIndex];
+        Vector3 pos = card.transform.position;
+        float zRot = card.transform.rotation.eulerAngles.z;
+
+        // The host "acts" as the bot, so pass the bot's clientId
+        KingKillCardServerRpc(
+            gpm.GetGlobalIndexFromLocal(choice.seat),
+            choice.cardIndex,
+            pos,
+            zRot,
+            new ServerRpcParams
+            {
+                Receive = new ServerRpcReceiveParams { SenderClientId = botClientId }
+            }
+        );
+    }
+
 
 }

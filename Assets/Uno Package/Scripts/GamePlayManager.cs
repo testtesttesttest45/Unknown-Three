@@ -858,7 +858,6 @@ public class GamePlayManager : NetworkBehaviour
 
     public IEnumerator RunBotTurn(int botGlobalIndex)
     {
-        // Just for clarity: currentPlayerIndex is already local seat
         int localBotIndex = GetLocalIndexFromGlobal(botGlobalIndex);
 
         // Wait random delay (simulate bot "thinking")
@@ -875,7 +874,6 @@ public class GamePlayManager : NetworkBehaviour
         // Simulate discard - pick random card from hand
         SimulateBotDiscard(botGlobalIndex);
 
-        // Done! (Turn ends via normal discard logic)
     }
 
     private void SimulateBotDraw(int botGlobalIndex)
@@ -1292,7 +1290,13 @@ public class GamePlayManager : NetworkBehaviour
                     Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                 }
             );
+            if (IsHost && IsBotClientId(senderClientId))
+            {
+                // Only host triggers the King bot effect
+                King.Instance.StartBotKingPhase(senderClientId);
+            }
             return;
+
         }
 
 
