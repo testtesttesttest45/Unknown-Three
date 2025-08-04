@@ -81,7 +81,6 @@ public class GamePlayManager : NetworkBehaviour
     private HashSet<ulong> readyClientIds = new HashSet<ulong>();
 
     public WinnerUI winnerUI;
-    private bool deckEmptyAndWaitForTurnEnd = false;
 
     public CardType CurrentType
     {
@@ -118,6 +117,10 @@ public class GamePlayManager : NetworkBehaviour
         _audioSource = GetComponent<AudioSource>();
         if (_audioSource == null)
             _audioSource = gameObject.AddComponent<AudioSource>();
+
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < playerList.Count; i++)
+            Debug.Log($"[SeatSetup] Global seat {i}: clientId={playerList[i].clientId} (isMine={NetworkManager.Singleton.LocalClientId == playerList[i].clientId})");
     }
 
     public override void OnNetworkSpawn()
@@ -337,8 +340,10 @@ public class GamePlayManager : NetworkBehaviour
                 avatarIndex = pd.avatarIndex,
                 avatarName = pd.playerName.ToString()
             });
-            p2.isUserPlayer = (seat == 0);
+            // This is the correct logic:
+            p2.isUserPlayer = (pd.clientId == NetworkManager.Singleton.LocalClientId);
         }
+
     }
     public void CreateDeck()
     {
@@ -648,6 +653,11 @@ public class GamePlayManager : NetworkBehaviour
 
     void OnJackCardDiscardedByMe()
     {
+        if (!IsMyTurn() || !players[0].isUserPlayer)
+        {
+            Debug.LogWarning("OnJackCardDiscardedByMe called but not my turn or not user player!");
+            return;
+        }
         isJackRevealPhase = true;
         for (int seat = 0; seat < players.Count; seat++)
         {
@@ -686,58 +696,95 @@ public class GamePlayManager : NetworkBehaviour
 
     [ClientRpc]
     void RevealHandCardClientRpc(
-    int playerIndex, int cardIndex, CardType type, CardValue value,
-    ClientRpcParams rpcParams = default)
+     int playerIndex, int cardIndex, CardType type, CardValue value, ulong jackUserClientId,
+     ClientRpcParams rpcParams = default)
     {
+        if (IsBotClientId(jackUserClientId))
+        {
+            Debug.LogError("BUG: Bot Jack reveal triggered RevealHandCardClientRpc!");
+            return;
+        }
+        Debug.Log($"RevealHandCardClientRpc: local={NetworkManager.Singleton.LocalClientId} jack={jackUserClientId} botJack={IsBotClientId(jackUserClientId)}");
+
+        if (IsBotClientId(NetworkManager.Singleton.LocalClientId))
+            return;
+
+        if (NetworkManager.Singleton.LocalClientId != jackUserClientId)
+            return;
+        if (IsBotClientId(jackUserClientId))
+            return;
+
         var p = players[GetLocalIndexFromGlobal(playerIndex)];
         var card = p.cardsPanel.cards[cardIndex];
-
         card.Type = type;
         card.Value = value;
         card.IsOpen = true;
         StartCoroutine(HideCardAfterDelay(card, 1f));
     }
 
+
+
+    private ulong currentJackUserClientId = ulong.MaxValue;
+    private bool currentJackUserIsBot = false;
+
     [ServerRpc(RequireOwnership = false)]
     void RequestRevealHandCardServerRpc(int playerIndex, int cardIndex, ServerRpcParams serverRpcParams = default)
     {
+
         if (turnTimeoutCoroutine != null)
         {
             StopCoroutine(turnTimeoutCoroutine);
             turnTimeoutCoroutine = null;
         }
         FreezeTimerUI();
-        var handCard = players[playerIndex].cardsPanel.cards[cardIndex];
 
+        var handCard = players[playerIndex].cardsPanel.cards[cardIndex];
         ulong jackUserClientId = serverRpcParams.Receive.SenderClientId;
+        if (IsBotClientId(jackUserClientId))
+        {
+            Debug.LogWarning("RequestRevealHandCardServerRpc called for bot—this should never happen! Please check SimulateBotJackReveal.");
+            FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, true);
+            OnJackRevealDoneServerRpc();
+            return;
+        }
 
         RevealHandCardClientRpc(
-            playerIndex, cardIndex, handCard.Type, handCard.Value,
+            playerIndex, cardIndex, handCard.Type, handCard.Value, jackUserClientId,
             new ClientRpcParams
             {
                 Send = new ClientRpcSendParams
                 {
-                    TargetClientIds = new List<ulong> { jackUserClientId }
+                    TargetClientIds = new ulong[] { jackUserClientId }
                 }
             }
         );
-        List<ulong> others = new List<ulong>();
-        foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
-            if (pd.clientId != jackUserClientId)
-                others.Add(pd.clientId);
-        FlashMarkedOutlineClientRpc(playerIndex, cardIndex, new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = others } });
-
-
+        FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, false);
         OnJackRevealDoneServerRpc();
     }
 
     [ClientRpc]
-    void FlashMarkedOutlineClientRpc(int playerIndex, int cardIndex, ClientRpcParams rpcParams = default)
+    void FlashMarkedOutlineClientRpc(int playerIndex, int cardIndex, ulong jackUserClientId, bool jackUserIsBot)
     {
+        // If Jack user is a bot, everyone sees only the flash.
+        if (!jackUserIsBot && NetworkManager.Singleton.LocalClientId == jackUserClientId)
+            return; // Jack user skips flash—they see the value already
+
         var p = players[GetLocalIndexFromGlobal(playerIndex)];
         var card = p.cardsPanel.cards[cardIndex];
+
+        card.IsOpen = false;
         card.FlashEyeOutline();
     }
+
+
+    // Add this helper coroutine to your class:
+    private IEnumerator RestoreIsOpen(Card card, bool wasOpen, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        card.IsOpen = wasOpen;
+    }
+
+
 
 
     [ServerRpc(RequireOwnership = false)]
@@ -746,6 +793,9 @@ public class GamePlayManager : NetworkBehaviour
         isJackRevealPhase = false;
         if (IsHost)
             StartCoroutine(DelayedNextPlayerTurn(2.0f));
+
+        currentJackUserClientId = ulong.MaxValue;
+        currentJackUserIsBot = false;
     }
 
     private void ResetAndRestartTurnTimerCoroutine()
@@ -774,9 +824,17 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void StartJackRevealLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
     {
-        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        Debug.Log($"[JackReveal] I am {NetworkManager.Singleton.LocalClientId} (IsHost={IsHost}), Jack user is {clientId}");
+
+        if (NetworkManager.Singleton.LocalClientId != clientId)
+            return;
+
+        Debug.Log("Running OnJackCardDiscardedByMe!");
         OnJackCardDiscardedByMe();
     }
+
+
+
 
     [ClientRpc]
     public void EndTurnForAllClientRpc()
@@ -789,8 +847,69 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (!IsHost) return;
         NextPlayerIndex();
-        StartPlayerTurnForAllClientRpc(GetGlobalIndexFromLocal(currentPlayerIndex));
+        int globalIndex = GetGlobalIndexFromLocal(currentPlayerIndex);
+        StartPlayerTurnForAllClientRpc(globalIndex);
+
+        if (IsCurrentPlayerBot())
+        {
+            StartCoroutine(RunBotTurn(globalIndex));
+        }
     }
+
+    private IEnumerator RunBotTurn(int botGlobalIndex)
+    {
+        // Just for clarity: currentPlayerIndex is already local seat
+        int localBotIndex = GetLocalIndexFromGlobal(botGlobalIndex);
+
+        // Wait random delay (simulate bot "thinking")
+        float waitBeforeDraw = Random.Range(0.3f, 1.5f);
+        yield return new WaitForSeconds(waitBeforeDraw);
+
+        // Simulate deck click (draw)
+        SimulateBotDraw(botGlobalIndex);
+
+        // Wait random delay before discard (simulate "thinking")
+        float waitBeforeDiscard = Random.Range(0.5f, 3.0f);
+        yield return new WaitForSeconds(waitBeforeDiscard);
+
+        // Simulate discard - pick random card from hand
+        SimulateBotDiscard(botGlobalIndex);
+
+        // Done! (Turn ends via normal discard logic)
+    }
+
+    private void SimulateBotDraw(int botGlobalIndex)
+    {
+        // Simulate drawing: peek top card and notify server
+        if (cards.Count == 0) return;
+        SerializableCard topCard = cards[cards.Count - 1];
+
+        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[botGlobalIndex].clientId;
+        // Record bot's peeked card
+        peekedCardsByClientId[botClientId] = topCard;
+    }
+
+    private void SimulateBotDiscard(int botGlobalIndex)
+    {
+        // Simulate discarding (the "UNO" click + select hand)
+        if (cards.Count == 0) return;
+        SerializableCard topCard = cards[cards.Count - 1];
+
+        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[botGlobalIndex].clientId;
+
+        RequestDiscardPeekedCardServerRpc(topCard.Value, botClientId);
+    }
+
+
+
+    public bool IsCurrentPlayerBot()
+    {
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        int globalIndex = GetGlobalIndexFromLocal(currentPlayerIndex);
+        if (globalIndex < 0 || globalIndex >= playerList.Count) return false;
+        return playerList[globalIndex].clientId >= 9000;
+    }
+
 
     public int GetPlayerIndexFromClientId(ulong clientId)
     {
@@ -798,8 +917,10 @@ public class GamePlayManager : NetworkBehaviour
         for (int i = 0; i < playerList.Count; i++)
             if (playerList[i].clientId == clientId)
                 return i;
+        Debug.LogError($"[GetPlayerIndexFromClientId] Could not find clientId={clientId} in playerList!");
         return -1;
     }
+
 
     public void EnableDeckClick()
     {
@@ -1012,53 +1133,9 @@ public class GamePlayManager : NetworkBehaviour
         DisableAllHandCardGlow();
         RequestDiscardPeekedCardServerRpc(discardValue);
 
-        if (discardValue == CardValue.Jack)
-        {
-            isJackRevealPhase = true;
-            arrowObject.SetActive(false);
-            UpdateDeckClickability();
-            if (players[0].isUserPlayer)
-            {
-                players[0].SetTimerVisible(true);
-                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-            }
-            if (IsHost)
-            {
-                OnJackCardDiscardedByMe();
-            }
-        }
-        else if (discardValue == CardValue.Queen)
-        {
-            arrowObject.SetActive(false);
-            UpdateDeckClickability();
-            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
-            if (players[0].isUserPlayer)
-            {
-                players[0].SetTimerVisible(true);
-                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-                Queen.Instance.StartQueenSwap();
-            }
-        }
-        else if (discardValue == CardValue.King)
-        {
-            arrowObject.SetActive(false);
-            UpdateDeckClickability();
-            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
-        }
-        else if (discardValue == CardValue.Fiend)
-        {
-            arrowObject.SetActive(false);
-            UpdateDeckClickability();
-            ResetTurnTimerClientRpc(currentPlayerIndex, turnTimerDuration);
-            if (players[0].isUserPlayer)
-            {
-                players[0].SetTimerVisible(true);
-                players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-                Fiend.Instance.ShowFiendPopup();
-            }
-        }
-
+        // === REMOVE ALL JACK/QUEEN/KING/ETC LOGIC FROM HERE ===
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     void DiscardPeekedCardServerRpc(int cardType, int cardValue, ServerRpcParams rpcParams = default)
@@ -1108,8 +1185,19 @@ public class GamePlayManager : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    void RequestDiscardPeekedCardServerRpc(CardValue discardValue, ServerRpcParams rpcParams = default)
+    void RequestDiscardPeekedCardServerRpc(CardValue discardValue, ulong actorClientId = ulong.MaxValue, ServerRpcParams rpcParams = default)
     {
+        ulong senderClientId = (actorClientId == ulong.MaxValue)
+            ? rpcParams.Receive.SenderClientId
+            : actorClientId;
+        int playerIndex = GetPlayerIndexFromClientId(senderClientId);
+
+
+        if (playerIndex < 0 || cards.Count == 0)
+        {
+            Debug.LogWarning("[RequestDiscardPeekedCardServerRpc] Invalid playerIndex or no cards!");
+            return;
+        }
         if (turnTimeoutCoroutine != null)
         {
             StopCoroutine(turnTimeoutCoroutine);
@@ -1117,8 +1205,6 @@ public class GamePlayManager : NetworkBehaviour
         }
         FreezeTimerUI();
 
-        ulong senderClientId = rpcParams.Receive.SenderClientId;
-        int playerIndex = GetPlayerIndexFromClientId(senderClientId);
         if (playerIndex < 0 || cards.Count == 0) return;
 
         SerializableCard drawn = cards[cards.Count - 1];
@@ -1135,20 +1221,33 @@ public class GamePlayManager : NetworkBehaviour
 
         if (discardValue == CardValue.Jack)
         {
+
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
 
             if (IsHost)
                 ResetAndRestartTurnTimerCoroutine();
+            Debug.Log($"[RequestDiscardPeekedCardServerRpc] senderClientId={senderClientId} IsBot={IsBotClientId(senderClientId)} IsHost={IsHost}");
+            // For bots, force host to run SimulateBotJackReveal directly, skip ClientRpc entirely
 
-            StartJackRevealLocalOnlyClientRpc(
-                senderClientId,
-                new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
-                }
-            );
+            if (IsBotClientId(senderClientId))
+            {
+                if (IsHost)
+                    StartCoroutine(SimulateBotJackReveal(senderClientId));
+            }
+            else
+            {
+                // For humans, call the ClientRpc as before (target just the clientId)
+                StartJackRevealLocalOnlyClientRpc(
+                    senderClientId,
+                    new ClientRpcParams
+                    {
+                        Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
+                    }
+                );
+            }
             return;
         }
+
         else if (discardValue == CardValue.Queen)
         {
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
@@ -1228,6 +1327,11 @@ public class GamePlayManager : NetworkBehaviour
             EndTurnForAllClientRpc();
     }
 
+    private bool IsBotClientId(ulong clientId)
+    {
+        return clientId >= 9000;
+    }
+
     [ClientRpc]
     void PlaySpecialCardVoiceClientRpc(int cardValue)
     {
@@ -1246,6 +1350,34 @@ public class GamePlayManager : NetworkBehaviour
             _audioSource.PlayOneShot(clip);
         }
     }
+
+    private IEnumerator SimulateBotJackReveal(ulong botClientId)
+    {
+        Debug.Log($"[SimulateBotJackReveal] botClientId={botClientId}");
+        yield return new WaitForSeconds(Random.Range(0.3f, 1.0f));
+
+        List<int> validTargets = new List<int>();
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (players[i].isInRoom && players[i].cardsPanel.cards.Count > 0)
+                validTargets.Add(i);
+        }
+        if (validTargets.Count == 0)
+        {
+            Debug.LogWarning("[SimulateBotJackReveal] No valid target players!");
+            yield break;
+        }
+        int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
+        int targetCardIndex = Random.Range(0, players[targetPlayerIndex].cardsPanel.cards.Count);
+
+        Debug.Log($"[SimulateBotJackReveal] Bot reveals playerIndex={targetPlayerIndex} cardIndex={targetCardIndex}");
+
+        // DONT call RequestRevealHandCardServerRpc for bots! Do this instead:
+        FlashMarkedOutlineClientRpc(targetPlayerIndex, targetCardIndex, botClientId, true);
+        OnJackRevealDoneServerRpc();
+    }
+
+
 
     [ClientRpc]
     void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
