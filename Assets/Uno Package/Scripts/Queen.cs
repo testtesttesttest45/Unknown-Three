@@ -206,4 +206,58 @@ public class Queen : NetworkBehaviour
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }
 
+    public void StartBotQueenSwapPhase(ulong botClientId)
+    {
+        StartCoroutine(BotQueenSwapRoutine(botClientId));
+    }
+
+    private IEnumerator BotQueenSwapRoutine(ulong botClientId)
+    {
+        var gpm = GamePlayManager.instance;
+        var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
+
+        for (int seat = 0; seat < gpm.players.Count; seat++)
+        {
+            var player = gpm.players[seat];
+            for (int cardIndex = 0; cardIndex < player.cardsPanel.cards.Count; cardIndex++)
+            {
+                if (player.cardsPanel.cards[cardIndex] != null)
+                    candidates.Add((seat, cardIndex));
+            }
+        }
+
+        if (candidates.Count < 2) yield break;
+
+        int firstIdx = Random.Range(0, candidates.Count);
+        int secondIdx;
+        do
+        {
+            secondIdx = Random.Range(0, candidates.Count);
+        } while (secondIdx == firstIdx);
+
+        var first = candidates[firstIdx];
+        var second = candidates[secondIdx];
+
+        var cardA = gpm.players[first.seat].cardsPanel.cards[first.cardIndex];
+        var cardB = gpm.players[second.seat].cardsPanel.cards[second.cardIndex];
+
+        cardA.ShowGlow(true);
+        cardB.ShowGlow(true);
+
+        yield return new WaitForSeconds(0.85f);
+
+        cardA.ShowGlow(false);
+        cardB.ShowGlow(false);
+
+        int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(first.seat);
+        int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(second.seat);
+
+        RequestQueenSwapServerRpc(
+            firstGlobalSeat, first.cardIndex,
+            secondGlobalSeat, second.cardIndex,
+            new ServerRpcParams { Receive = new ServerRpcReceiveParams { SenderClientId = botClientId } }
+        );
+    }
+
+
 }

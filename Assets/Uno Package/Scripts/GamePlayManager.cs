@@ -1260,8 +1260,13 @@ public class GamePlayManager : NetworkBehaviour
                     Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                 }
             );
+            if (IsHost && IsBotClientId(senderClientId))
+            {
+                Queen.Instance.StartBotQueenSwapPhase(senderClientId);
+            }
             return;
         }
+
         else if (discardValue == CardValue.King)
         {
             if (turnTimeoutCoroutine != null)
