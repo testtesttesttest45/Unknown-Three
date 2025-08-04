@@ -856,7 +856,7 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-    private IEnumerator RunBotTurn(int botGlobalIndex)
+    public IEnumerator RunBotTurn(int botGlobalIndex)
     {
         // Just for clarity: currentPlayerIndex is already local seat
         int localBotIndex = GetLocalIndexFromGlobal(botGlobalIndex);

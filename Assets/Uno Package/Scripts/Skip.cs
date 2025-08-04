@@ -13,19 +13,22 @@ public class Skip : NetworkBehaviour
 
     public void TriggerSkip()
     {
-        int skippedLocalIndex = GamePlayManager.instance.currentPlayerIndex;
-
         GamePlayManager.instance.NextPlayerIndex();
         int skippedGlobalIndex = GamePlayManager.instance.GetGlobalIndexFromLocal(GamePlayManager.instance.currentPlayerIndex);
 
         ShowSkippedPlayerClientRpc(skippedGlobalIndex);
 
         GamePlayManager.instance.NextPlayerIndex();
+        int newGlobalIndex = GamePlayManager.instance.GetGlobalIndexFromLocal(GamePlayManager.instance.currentPlayerIndex);
 
-        GamePlayManager.instance.StartPlayerTurnForAllClientRpc(
-            GamePlayManager.instance.GetGlobalIndexFromLocal(GamePlayManager.instance.currentPlayerIndex)
-        );
+        GamePlayManager.instance.StartPlayerTurnForAllClientRpc(newGlobalIndex);
+
+        if (NetworkManager.Singleton.IsHost && GamePlayManager.instance.IsCurrentPlayerBot())
+        {
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.RunBotTurn(newGlobalIndex));
+        }
     }
+
 
     [ClientRpc]
     void ShowSkippedPlayerClientRpc(int globalIndex)
