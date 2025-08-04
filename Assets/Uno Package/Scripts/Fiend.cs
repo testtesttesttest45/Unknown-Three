@@ -1,8 +1,9 @@
-using UnityEngine;
-using Unity.Netcode;
-using UnityEngine.UI;
-using TMPro;
+using System.Collections;
 using System.Collections.Generic;
+using TMPro;
+using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.UI;
 
 public class Fiend : NetworkBehaviour
 {
@@ -191,6 +192,36 @@ public class Fiend : NetworkBehaviour
     public void HideFiendPopup()
     {
         fiendPopup.SetActive(false);
+    }
+
+    public void StartBotFiendJumble(ulong botClientId)
+    {
+        StartCoroutine(BotFiendJumbleRoutine(botClientId));
+    }
+
+    private IEnumerator BotFiendJumbleRoutine(ulong botClientId)
+    {
+        // Wait a short moment so it doesn’t feel instant
+        yield return new WaitForSeconds(Random.Range(0.6f, 1.1f));
+
+        var gpm = GamePlayManager.instance;
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+
+        // Find all opponents (not self/bot)
+        List<int> targetSeats = new List<int>();
+        for (int globalSeat = 0; globalSeat < playerList.Count; globalSeat++)
+        {
+            if (playerList[globalSeat].clientId != botClientId)
+                targetSeats.Add(globalSeat);
+        }
+
+        if (targetSeats.Count == 0) yield break; // No targets? (shouldn’t happen)
+
+        int randomTarget = targetSeats[Random.Range(0, targetSeats.Count)];
+        RequestJumbleHandServerRpc(randomTarget, new ServerRpcParams
+        {
+            Receive = new ServerRpcReceiveParams { SenderClientId = botClientId }
+        });
     }
 
 }

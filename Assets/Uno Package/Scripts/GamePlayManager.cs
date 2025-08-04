@@ -1297,14 +1297,11 @@ public class GamePlayManager : NetworkBehaviour
             );
             if (IsHost && IsBotClientId(senderClientId))
             {
-                // Only host triggers the King bot effect
                 King.Instance.StartBotKingPhase(senderClientId);
             }
             return;
 
         }
-
-
 
         else if (discardValue == CardValue.Fiend)
         {
@@ -1319,6 +1316,10 @@ public class GamePlayManager : NetworkBehaviour
                     Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                 }
             );
+            if (IsHost && IsBotClientId(senderClientId))
+            {
+                Fiend.Instance.StartBotFiendJumble(senderClientId);
+            }
             return;
         }
 
