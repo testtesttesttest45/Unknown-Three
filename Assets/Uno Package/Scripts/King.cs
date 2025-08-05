@@ -236,14 +236,26 @@ public class King : NetworkBehaviour
 
     private IEnumerator BotKingPhaseRoutine(ulong botClientId)
     {
-        // Bot thinking time: 1 to 3 seconds
         yield return new WaitForSeconds(Random.Range(1f, 2f));
 
         var gpm = GamePlayManager.instance;
         var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
 
+        int botSeat = -1;
+        for (int i = 0; i < gpm.players.Count; i++)
+        {
+            var pd = MultiplayerManager.Instance.playerDataNetworkList[GamePlayManager.instance.GetGlobalIndexFromLocal(i)];
+            if (pd.clientId == botClientId)
+            {
+                botSeat = i;
+                break;
+            }
+        }
+
         for (int seat = 0; seat < gpm.players.Count; seat++)
         {
+            if (seat == botSeat) continue; // but skip self
+
             var player = gpm.players[seat];
             for (int cardIdx = 0; cardIdx < player.cardsPanel.cards.Count; cardIdx++)
             {
@@ -253,10 +265,9 @@ public class King : NetworkBehaviour
                 }
             }
         }
-        if (candidates.Count == 0) yield break; // Safety
+        if (candidates.Count == 0) yield break;
 
         var choice = candidates[Random.Range(0, candidates.Count)];
-
         var card = gpm.players[choice.seat].cardsPanel.cards[choice.cardIndex];
         Vector3 pos = card.transform.position;
         float zRot = card.transform.rotation.eulerAngles.z;
@@ -272,6 +283,7 @@ public class King : NetworkBehaviour
             }
         );
     }
+
 
 
 
