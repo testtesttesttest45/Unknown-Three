@@ -21,6 +21,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public GameObject markedOutline;
     private Coroutine flashMarkedRoutine;
     public GameObject eyeOutline;
+    public GameObject specialOutline;
 
     [Space(20)]
     public Text label1;
@@ -88,56 +89,99 @@ public class Card : MonoBehaviour, IPointerClickHandler
         string txt = "";
         string spritePath = "Cards/BlankCard";
 
-        if (IsOpen)
+        // Special case: the only "0" card (gold card)
+        if (Value == CardValue.Zero)
         {
-            if (Value == CardValue.Skip)
+            if (IsOpen)
             {
-                spritePath = $"Cards/Skip_{(int)Type + 1}";
-                txt = "";
-            }
-            else if (Value == CardValue.Jack)
-            {
-                spritePath = $"Cards/Number_{(int)Type + 1}";
-                txt = "J";
-            }
-            else if (Value == CardValue.Queen)
-            {
-                spritePath = $"Cards/Number_{(int)Type + 1}";
-                txt = "Q";
-            }
-            else if (Value == CardValue.King)
-            {
-                spritePath = $"Cards/Number_{(int)Type + 1}";
-                txt = "K";
-            }
-            else if (Value == CardValue.Fiend)
-            {
-                spritePath = $"Cards/Number_{(int)Type + 1}";
-                txt = "F";
+                spritePath = "Cards/gold card";
+                txt = "0";
+                label1.color = Color.white;
+                label2.color = Color.white;
+                label3.color = Color.white;
+                label1.text = txt;
+                label2.text = txt;
+                label3.text = txt;
+
+                if (specialOutline != null)
+                    specialOutline.SetActive(true);
             }
             else
             {
-                int value = (int)Value;
-                spritePath = $"Cards/Number_{(int)Type + 1}";
-                if (value == 6 || value == 9)
-                    spritePath += "_Underline";
-                txt = value.ToString();
+                spritePath = "Cards/CardBack";
+                label1.text = label2.text = label3.text = "";
+                if (specialOutline != null)
+                    specialOutline.SetActive(false);
             }
+
+            // Always hide other outlines for zero
+            if (glowOutline != null) glowOutline.SetActive(false);
+            if (killedOutline != null) killedOutline.SetActive(false);
+            if (markedOutline != null) markedOutline.SetActive(false);
+            if (eyeOutline != null) eyeOutline.SetActive(false);
+        }
+        else // --- all other cards ---
+        {
+            if (IsOpen)
+            {
+                if (Value == CardValue.Skip)
+                {
+                    spritePath = $"Cards/Skip_{(int)Type + 1}";
+                    txt = "";
+                }
+                else if (Value == CardValue.Jack)
+                {
+                    spritePath = $"Cards/Number_{(int)Type + 1}";
+                    txt = "J";
+                }
+                else if (Value == CardValue.Queen)
+                {
+                    spritePath = $"Cards/Number_{(int)Type + 1}";
+                    txt = "Q";
+                }
+                else if (Value == CardValue.King)
+                {
+                    spritePath = $"Cards/Number_{(int)Type + 1}";
+                    txt = "K";
+                }
+                else if (Value == CardValue.Fiend)
+                {
+                    spritePath = $"Cards/Number_{(int)Type + 1}";
+                    txt = "F";
+                }
+                else
+                {
+                    int value = (int)Value;
+                    spritePath = $"Cards/Number_{(int)Type + 1}";
+                    if (value == 6 || value == 9)
+                        spritePath += "_Underline";
+                    txt = value.ToString();
+                }
+
+                label1.color = Color.white;
+                label2.color = Type.GetColor();
+                label3.color = Color.white;
+                label1.text = txt;
+                label2.text = txt;
+                label3.text = txt;
+            }
+            else
+            {
+                spritePath = "Cards/CardBack";
+                label1.text = label2.text = label3.text = "";
+            }
+
+            // Zero's outline is only for zero card!
+            if (specialOutline != null)
+                specialOutline.SetActive(false);
         }
 
         Sprite loadedSprite = Resources.Load<Sprite>(spritePath);
         if (loadedSprite == null)
             loadedSprite = Resources.Load<Sprite>("Cards/BlankCard");
         GetComponent<Image>().sprite = loadedSprite;
-
-        label1.color = Color.white;
-        label2.color = Type.GetColor();
-        label3.color = Color.white;
-
-        label1.text = txt;
-        label2.text = txt;
-        label3.text = txt;
     }
+
 
     public void CalcPoint()
     {

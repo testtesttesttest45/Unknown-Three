@@ -280,7 +280,7 @@ MonoBehaviour:
   cardIndex: 0
   PeekMode: 0
   glowOutline: {fileID: 6646697277013177370}
-  killedOutline: {fileID: 5729597669257014210}
+  killedOutline: {fileID: 6233306882889489139}
   markedOutline: {fileID: 4813852767560408802}
   eyeOutline: {fileID: 4284386107086210936}
   label1: {fileID: 114254947193000722}
@@ -288,6 +288,7 @@ MonoBehaviour:
   label3: {fileID: 114176573625267370}
   moveSpeed: 0.3
   point: 0
+  specialOutline: {fileID: 5729597669257014210}
 --- !u!223 &4727676595441614024
 Canvas:
   m_ObjectHideFlags: 0

@@ -352,7 +352,6 @@ public class GamePlayManager : NetworkBehaviour
                 avatarIndex = pd.avatarIndex,
                 avatarName = pd.playerName.ToString()
             });
-            // This is the correct logic:
             p2.isUserPlayer = (pd.clientId == NetworkManager.Singleton.LocalClientId);
         }
 
@@ -363,11 +362,13 @@ public class GamePlayManager : NetworkBehaviour
         wasteCards = new List<SerializableCard>();
 
         List<CardValue> values = new List<CardValue>
-    {
-        CardValue.Zero, CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
-        CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
-        CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
-    };
+{
+    CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
+    CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
+    CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
+};
+
+        // Add regular cards for all 4 suits (excluding "0")
         for (int j = 0; j < 4; j++)
         {
             foreach (var val in values)
@@ -376,7 +377,11 @@ public class GamePlayManager : NetworkBehaviour
                 cards.Add(card);
             }
         }
+
+        // Add ONE unique "0" card (Type.Other or any suit you prefer)
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
+
     }
 
     private IEnumerator StartPeekingPhase()
@@ -1685,26 +1690,30 @@ public class GamePlayManager : NetworkBehaviour
         float randomRot = Random.Range(-50, 50f);
         StartCoroutine(AnimateCardMove(wasteObj, handSlotPos, cardWastePile.transform.position, 0.5f, randomRot));
 
-        // Animate the new card flying in
         Vector3 fromPos = fromWastePile ? cardWastePile.transform.position : cardDeckTransform.position;
         GameObject newCardGO = Instantiate(_cardPrefab.gameObject, fromPos, Quaternion.identity, p.cardsPanel.transform.parent);
         Card newCardVisual = newCardGO.GetComponent<Card>();
         newCardVisual.Type = newCard.Type;
         newCardVisual.Value = newCard.Value;
-        newCardVisual.IsOpen = p.isUserPlayer;
+
+        if (fromWastePile) newCardVisual.IsOpen = true;
+        else newCardVisual.IsOpen = p.isUserPlayer;
         newCardVisual.CalcPoint();
 
         UpdateDeckVisualClientRpc(deck);
 
+        float animDuration = fromWastePile ? 0.8f : 0.5f;
+
         StartCoroutine(AnimateHandCardReplace(
-            p, handIndex, newCardVisual, newCardGO, fromPos, handSlotPos, 0.5f, playerIndex
+            p, handIndex, newCardVisual, newCardGO, fromPos, handSlotPos, animDuration, playerIndex, fromWastePile
         ));
+
 
         OnUnoClick();
     }
 
     IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
-    Vector3 fromPos, Vector3 handSlotPos, float animDuration, int playerIndex)
+    Vector3 fromPos, Vector3 handSlotPos, float animDuration, int playerIndex, bool fromWastePile)
     {
         yield return StartCoroutine(AnimateCardMove(newCardVisual, fromPos, handSlotPos, animDuration));
         Destroy(newCardGO, 0.01f);
@@ -1723,6 +1732,10 @@ public class GamePlayManager : NetworkBehaviour
         float flashDuration = 2f;
         yield return new WaitForSeconds(flashDuration);
 
+        // --- Set the card facedown for everyone after animation and flash
+        if (c != null)
+            c.IsOpen = false;
+
         if (IsHost && cards.Count == 0)
         {
             unoBtn.SetActive(false);
@@ -1738,9 +1751,9 @@ public class GamePlayManager : NetworkBehaviour
             {
                 StartCoroutine(DelayedNextPlayerTurn(0f));
             }
-            // Else, for bots, the bot logic will advance turn after a freeze
         }
     }
+
 
     void DisableAllHandCardGlow()
     {

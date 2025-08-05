@@ -179,7 +179,8 @@ public enum CardType
     Red,    // 0 → Number_1
     Yellow, // 1 → Number_2
     Green,  // 2 → Number_3
-    Blue    // 3 → Number_4
+    Blue,   // 3 → Number_4
+    Other
 }
 
 public enum CardValue
