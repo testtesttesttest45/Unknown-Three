@@ -82,6 +82,18 @@ public class GamePlayManager : NetworkBehaviour
 
     public WinnerUI winnerUI;
 
+    [Header("Bot AI Tuning")]
+    [Tooltip("Bot will only consider waste pile if card value is <= this value.")]
+    public int botWastePileMinValue = 3;
+
+    [Tooltip("Chance (percent) for bot to draw a minimum card from waste pile (0-100).")]
+    [Range(0, 100)]
+    public int botWastePileDrawChance = 20;
+
+    [Tooltip("Chance (percent) for bot to do a replace after deck draw (0-100).")]
+    [Range(0, 100)]
+    public int botDeckReplaceChance = 20;
+
     public CardType CurrentType
     {
         get { return _currentType; }
@@ -566,6 +578,15 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+    private Card GetTopWasteCard()
+    {
+        if (cardWastePile == null || cardWastePile.transform.childCount == 0)
+            return null;
+        var top = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1);
+        return top != null ? top.GetComponent<Card>() : null;
+    }
+
+
     private IEnumerator ShowGameOverAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
@@ -582,6 +603,9 @@ public class GamePlayManager : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void RequestWasteCardSwapServerRpc(int handIndex, SerializableCard newCard, SerializableCard replacedCard, ServerRpcParams rpcParams = default)
     {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+        int playerIndex = GetPlayerIndexFromClientId(clientId);
+        Debug.Log($"[WasteCardSwap] ServerRpc called by clientId={clientId}, playerIndex={playerIndex} (should be bot), handIndex={handIndex}");
         if (turnTimeoutCoroutine != null)
         {
             StopCoroutine(turnTimeoutCoroutine);
@@ -589,8 +613,6 @@ public class GamePlayManager : NetworkBehaviour
         }
         FreezeTimerUI();
 
-        ulong clientId = rpcParams.Receive.SenderClientId;
-        int playerIndex = GetPlayerIndexFromClientId(clientId);
         if (playerIndex < 0 || playerIndex >= players.Count) return;
 
         wasteCards.Add(replacedCard);
@@ -858,47 +880,149 @@ public class GamePlayManager : NetworkBehaviour
 
     public IEnumerator RunBotTurn(int botGlobalIndex)
     {
+        if (Fiend.Instance != null)
+            Fiend.Instance.HideFiendPopup();
         int localBotIndex = GetLocalIndexFromGlobal(botGlobalIndex);
-
-        // Wait random delay (simulate bot "thinking")
-        float waitBeforeDraw = Random.Range(0.3f, 1.5f);
-        yield return new WaitForSeconds(waitBeforeDraw);
-
-        // Simulate deck click (draw)
-        SimulateBotDraw(botGlobalIndex);
-
-        // Wait random delay before discard (simulate "thinking")
-        float waitBeforeDiscard = Random.Range(0.5f, 3.0f);
-        yield return new WaitForSeconds(waitBeforeDiscard);
-
-        // Simulate discard - pick random card from hand
-        SimulateBotDiscard(botGlobalIndex);
-
-    }
-
-    private void SimulateBotDraw(int botGlobalIndex)
-    {
-        // Simulate drawing: peek top card and notify server
-        if (cards.Count == 0) return;
-        SerializableCard topCard = cards[cards.Count - 1];
-
         ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[botGlobalIndex].clientId;
-        // Record bot's peeked card
-        peekedCardsByClientId[botClientId] = topCard;
+        Debug.Log($"[BotTurn] I am botGlobalIndex={botGlobalIndex} localBotIndex={localBotIndex} botClientId={botClientId}");
+
+        float waitBefore = Random.Range(1f, 2f);
+        yield return new WaitForSeconds(waitBefore);
+
+        if (cards.Count == 0)
+            yield break;
+
+        // 1. Try Waste Pile Steal
+        Card wasteCard = GetTopWasteCard();
+        bool canTakeWaste = false;
+        SerializableCard wasteSer = default;
+
+        if (wasteCard != null && wasteCard.killedOutline != null && !wasteCard.killedOutline.activeSelf)
+        {
+            // Only if top waste card value is <= botWastePileMinValue, and within chance
+            if ((int)wasteCard.Value <= botWastePileMinValue && Random.Range(0, 100) < botWastePileDrawChance)
+            {
+                canTakeWaste = true;
+                wasteSer = new SerializableCard(wasteCard.Type, wasteCard.Value);
+            }
+        }
+
+        if (canTakeWaste)
+        {
+            float delay = Random.Range(1f, 2f);
+            yield return new WaitForSeconds(delay);
+
+            var botHand = players[localBotIndex].cardsPanel.cards;
+            int swapHandIdx = Random.Range(0, botHand.Count);
+
+            peekedCardsByClientId[botClientId] = wasteSer;
+
+            if (NetworkManager.Singleton.IsHost)
+            {
+                SerializableCard replacedCard = new SerializableCard(botHand[swapHandIdx].Type, botHand[swapHandIdx].Value);
+                DoWasteCardSwapForBot(localBotIndex, swapHandIdx, wasteSer, replacedCard);
+            }
+
+            yield break;
+        }
+
+        // 2. Deck draw: decide what to do
+        float roll = Random.Range(0, 100);
+        bool doReplace = roll < botDeckReplaceChance; // e.g. 20%
+
+        if (cards.Count == 0) yield break;
+        SerializableCard topDeckCard = cards[cards.Count - 1];
+        peekedCardsByClientId[botClientId] = topDeckCard;
+
+        float delay2 = Random.Range(1f, 2f);
+        yield return new WaitForSeconds(delay2);
+
+        if (doReplace)
+        {
+            var botHand = players[localBotIndex].cardsPanel.cards;
+            int replaceIdx = Random.Range(0, botHand.Count);
+
+            if (NetworkManager.Singleton.IsHost)
+            {
+                DoDeckReplaceForBot(localBotIndex, replaceIdx);
+            }
+        }
+        else
+        {
+            RequestDiscardPeekedCardServerRpc(topDeckCard.Value, botClientId);
+        }
     }
 
-    private void SimulateBotDiscard(int botGlobalIndex)
+
+    // Host-only bot deck replace
+    private void DoDeckReplaceForBot(int botLocalIndex, int handIndex)
     {
-        // Simulate discarding (the "UNO" click + select hand)
+        int playerIndex = botLocalIndex;
         if (cards.Count == 0) return;
-        SerializableCard topCard = cards[cards.Count - 1];
 
-        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[botGlobalIndex].clientId;
+        // Draw the top card
+        SerializableCard drawn = cards[cards.Count - 1];
+        cards.RemoveAt(cards.Count - 1);
 
-        RequestDiscardPeekedCardServerRpc(topCard.Value, botClientId);
+        Player2 p = players[playerIndex];
+        Card replacedCard = p.cardsPanel.cards[handIndex];
+        SerializableCard replacedSer = new SerializableCard(replacedCard.Type, replacedCard.Value);
+
+        wasteCards.Add(replacedSer);
+
+        ReplaceHandCardClientRpc(
+            playerIndex, handIndex, drawn, replacedSer,
+            cards.ToArray(), wasteCards.ToArray(), false
+        );
+        if (turnTimeoutCoroutine != null)
+        {
+            StopCoroutine(turnTimeoutCoroutine);
+            turnTimeoutCoroutine = null;
+        }
+        FreezeTimerUI();
+        StartCoroutine(WaitThenAdvanceBotTurn());
+    }
+
+    private IEnumerator WaitThenAdvanceBotTurn()
+    {
+        yield return new WaitForSeconds(2.0f);
+        EndTurnAndGoNextPlayer();
     }
 
 
+    // host-only, no ServerRpc!
+    private void DoWasteCardSwapForBot(int botLocalIndex, int handIndex, SerializableCard newCard, SerializableCard replacedCard)
+    {
+        int playerIndex = botLocalIndex;
+
+        wasteCards.Add(replacedCard);
+
+        ReplaceHandCardClientRpc(
+            playerIndex,
+            handIndex,
+            newCard,
+            replacedCard,
+            cards.ToArray(),
+            wasteCards.ToArray(),
+            true
+        );
+
+        if (turnTimeoutCoroutine != null)
+        {
+            StopCoroutine(turnTimeoutCoroutine);
+            turnTimeoutCoroutine = null;
+        }
+        FreezeTimerUI();
+        StartCoroutine(WaitThenAdvanceBotTurn());
+
+        RemoveTopWasteCardClientRpc();
+
+        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[playerIndex].clientId;
+        peekedCardsByClientId.Remove(botClientId);
+        hasPeekedCard = false;
+        peekedCard = null;
+        wasteInteractionStarted = false;
+    }
 
     public bool IsCurrentPlayerBot()
     {
@@ -907,7 +1031,6 @@ public class GamePlayManager : NetworkBehaviour
         if (globalIndex < 0 || globalIndex >= playerList.Count) return false;
         return playerList[globalIndex].clientId >= 9000;
     }
-
 
     public int GetPlayerIndexFromClientId(ulong clientId)
     {
@@ -918,7 +1041,6 @@ public class GamePlayManager : NetworkBehaviour
         Debug.LogError($"[GetPlayerIndexFromClientId] Could not find clientId={clientId} in playerList!");
         return -1;
     }
-
 
     public void EnableDeckClick()
     {
@@ -1130,8 +1252,6 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.SetActive(false);
         DisableAllHandCardGlow();
         RequestDiscardPeekedCardServerRpc(discardValue);
-
-        // === REMOVE ALL JACK/QUEEN/KING/ETC LOGIC FROM HERE ===
     }
 
 
@@ -1332,9 +1452,13 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         if (IsHost)
-            StartCoroutine(DelayedNextPlayerTurn(0.5f));
+        {
+            float delay = 1f;
+            StartCoroutine(DelayedNextPlayerTurn(delay));
+        }
         else
             EndTurnForAllClientRpc();
+
     }
 
     private bool IsBotClientId(ulong clientId)
@@ -1363,8 +1487,9 @@ public class GamePlayManager : NetworkBehaviour
 
     private IEnumerator SimulateBotJackReveal(ulong botClientId)
     {
+        
         Debug.Log($"[SimulateBotJackReveal] botClientId={botClientId}");
-        yield return new WaitForSeconds(Random.Range(0.3f, 1.0f));
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
 
         List<int> validTargets = new List<int>();
         for (int i = 0; i < players.Count; i++)
@@ -1384,6 +1509,12 @@ public class GamePlayManager : NetworkBehaviour
 
         // DONT call RequestRevealHandCardServerRpc for bots! Do this instead:
         FlashMarkedOutlineClientRpc(targetPlayerIndex, targetCardIndex, botClientId, true);
+        FreezeTimerUI();
+        if (turnTimeoutCoroutine != null)
+        {
+            StopCoroutine(turnTimeoutCoroutine);
+            turnTimeoutCoroutine = null;
+        }
         OnJackRevealDoneServerRpc();
     }
 
@@ -1598,10 +1729,17 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject.SetActive(false);
         }
 
-        // Only host advances turn after flash
         if (IsHost)
-            StartCoroutine(DelayedNextPlayerTurn(0f));
-
+        {
+            // Only advance here if it's NOT a bot!
+            var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+            int globalIndex = playerIndex;
+            if (globalIndex >= 0 && globalIndex < playerList.Count && playerList[globalIndex].clientId < 9000)
+            {
+                StartCoroutine(DelayedNextPlayerTurn(0f));
+            }
+            // Else, for bots, the bot logic will advance turn after a freeze
+        }
     }
 
     void DisableAllHandCardGlow()

@@ -213,6 +213,9 @@ public class Queen : NetworkBehaviour
 
     private IEnumerator BotQueenSwapRoutine(ulong botClientId)
     {
+        // Bot thinking time: 1 to 3 seconds
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
+
         var gpm = GamePlayManager.instance;
         var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
 
@@ -238,17 +241,6 @@ public class Queen : NetworkBehaviour
         var first = candidates[firstIdx];
         var second = candidates[secondIdx];
 
-        var cardA = gpm.players[first.seat].cardsPanel.cards[first.cardIndex];
-        var cardB = gpm.players[second.seat].cardsPanel.cards[second.cardIndex];
-
-        cardA.ShowGlow(true);
-        cardB.ShowGlow(true);
-
-        yield return new WaitForSeconds(0.85f);
-
-        cardA.ShowGlow(false);
-        cardB.ShowGlow(false);
-
         int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(first.seat);
         int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(second.seat);
 
@@ -258,6 +250,8 @@ public class Queen : NetworkBehaviour
             new ServerRpcParams { Receive = new ServerRpcReceiveParams { SenderClientId = botClientId } }
         );
     }
+
+
 
 
 }

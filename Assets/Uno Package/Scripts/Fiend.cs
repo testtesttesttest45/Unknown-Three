@@ -202,7 +202,7 @@ public class Fiend : NetworkBehaviour
     private IEnumerator BotFiendJumbleRoutine(ulong botClientId)
     {
         // Wait a short moment so it doesn’t feel instant
-        yield return new WaitForSeconds(Random.Range(0.6f, 1.1f));
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
 
         var gpm = GamePlayManager.instance;
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
@@ -215,7 +215,7 @@ public class Fiend : NetworkBehaviour
                 targetSeats.Add(globalSeat);
         }
 
-        if (targetSeats.Count == 0) yield break; // No targets? (shouldn’t happen)
+        if (targetSeats.Count == 0) yield break;
 
         int randomTarget = targetSeats[Random.Range(0, targetSeats.Count)];
         RequestJumbleHandServerRpc(randomTarget, new ServerRpcParams

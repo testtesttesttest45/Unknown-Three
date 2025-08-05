@@ -231,6 +231,14 @@ public class King : NetworkBehaviour
 
     public void StartBotKingPhase(ulong botClientId)
     {
+        StartCoroutine(BotKingPhaseRoutine(botClientId));
+    }
+
+    private IEnumerator BotKingPhaseRoutine(ulong botClientId)
+    {
+        // Bot thinking time: 1 to 3 seconds
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
+
         var gpm = GamePlayManager.instance;
         var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
 
@@ -245,16 +253,14 @@ public class King : NetworkBehaviour
                 }
             }
         }
-        if (candidates.Count == 0) return; // Safety
+        if (candidates.Count == 0) yield break; // Safety
 
         var choice = candidates[Random.Range(0, candidates.Count)];
 
-        // Use local positions (since this runs on host, it's fine)
         var card = gpm.players[choice.seat].cardsPanel.cards[choice.cardIndex];
         Vector3 pos = card.transform.position;
         float zRot = card.transform.rotation.eulerAngles.z;
 
-        // The host "acts" as the bot, so pass the bot's clientId
         KingKillCardServerRpc(
             gpm.GetGlobalIndexFromLocal(choice.seat),
             choice.cardIndex,
@@ -266,6 +272,7 @@ public class King : NetworkBehaviour
             }
         );
     }
+
 
 
 }

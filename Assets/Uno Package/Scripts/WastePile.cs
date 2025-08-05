@@ -181,8 +181,6 @@ public class WastePile : MonoBehaviour
         GamePlayManager.instance.peekedCardsByClientId.Remove(myClientId);
     }
 
-
-
     private bool IsTopCard()
     {
         if (wasteCard == null) return false;
