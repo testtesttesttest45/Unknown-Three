@@ -550,5 +550,13 @@ public class MultiplayerManager : NetworkBehaviour
         TryStartGameIfReady();
     }
 
-
+    public int GetMyGlobalSeat()
+    {
+        ulong myId = NetworkManager.Singleton.LocalClientId;
+        var list = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].clientId == myId)
+                return i;
+        return -1;
+    }
 }

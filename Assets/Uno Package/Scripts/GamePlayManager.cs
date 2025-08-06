@@ -75,6 +75,7 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip queenVoiceClip;
     public AudioClip kingVoiceClip;
     public AudioClip fiendVoiceClip;
+    public AudioClip fiendRevengeVoiceClip;
 
     public AudioSource _audioSource;
 
@@ -82,6 +83,9 @@ public class GamePlayManager : NetworkBehaviour
 
     public WinnerUI winnerUI;
     public TMPro.TextMeshProUGUI remainingCardsCounterText;
+    private bool turnEndedByTimeout = false;
+    private bool lastTurnEndedByTimeout = false;
+
 
     [Header("Bot AI Tuning")]
     [Tooltip("Bot will only consider waste pile if card value is <= this value.")]
@@ -415,7 +419,6 @@ public class GamePlayManager : NetworkBehaviour
             card.IsOpen = false;
             card.onClick = null;
 
-            // ✨ SHOW GLOW IF CAN PEEK
             card.ShowGlow(canPeek);
 
             if (canPeek)
@@ -532,11 +535,12 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     public void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
     {
+        foreach (var p in players)
+            p.wasTimeout = false;
         if (cards.Count == 0)
         {
             if (Fiend.Instance != null)
                 Fiend.Instance.HideFiendPopup();
-            // if there are glowing cards, disable them
             DisableAllHandCardGlowAllPlayers();
             if (IsHost)
                 StartCoroutine(ShowGameOverAfterDelay(1.5f));
@@ -1111,6 +1115,9 @@ public class GamePlayManager : NetworkBehaviour
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         ulong currentTurnClientId = playerList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
 
+        turnEndedByTimeout = true;
+        ShowTimeoutMessageClientRpc(currentPlayerIndex);
+
         if (peekedCardsByClientId.ContainsKey(currentTurnClientId))
         {
             var serCard = peekedCardsByClientId[currentTurnClientId];
@@ -1119,8 +1126,12 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         if (isTurnEnding) yield break;
+
+        yield return new WaitForSeconds(1f);
         EndTurnAndGoNextPlayer();
+
     }
+
 
     public void UpdateDeckClickability()
     {
@@ -1323,12 +1334,22 @@ public class GamePlayManager : NetworkBehaviour
             wasteInteractionStarted = false;
         }
         deckInteractionLocked = false;
+        unoBtn.SetActive(false);
     }
 
     [ClientRpc]
     void DiscardPeekedCardClientRpc(int cardType, int cardValue, SerializableCard[] deckCards)
     {
         UpdateDeckVisualClientRpc(deckCards);
+        if (peekedCard != null)
+        {
+            Destroy(peekedCard.gameObject);
+            peekedCard = null;
+            hasPeekedCard = false;
+            wasteInteractionStarted = false;
+        }
+        deckInteractionLocked = false;
+        unoBtn.SetActive(false);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -1369,7 +1390,7 @@ public class GamePlayManager : NetworkBehaviour
 
         if (discardValue == CardValue.Jack)
         {
-
+            ShowPowerMessageClientRpc(playerIndex, "Jack's Power", 1.5f);
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
 
             if (IsHost)
@@ -1398,6 +1419,7 @@ public class GamePlayManager : NetworkBehaviour
 
         else if (discardValue == CardValue.Queen)
         {
+            ShowPowerMessageClientRpc(playerIndex, "Queen's Power", 1.5f);
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
 
             if (IsHost)
@@ -1419,6 +1441,7 @@ public class GamePlayManager : NetworkBehaviour
 
         else if (discardValue == CardValue.King)
         {
+            ShowPowerMessageClientRpc(playerIndex, "King's Power", 1.5f);
             if (turnTimeoutCoroutine != null)
             {
                 StopCoroutine(turnTimeoutCoroutine);
@@ -1455,6 +1478,7 @@ public class GamePlayManager : NetworkBehaviour
 
         else if (discardValue == CardValue.Fiend)
         {
+            ShowPowerMessageClientRpc(playerIndex, "Fiend's Power", 1.5f);
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
             if (IsHost)
                 ResetAndRestartTurnTimerCoroutine();
@@ -1736,7 +1760,14 @@ public class GamePlayManager : NetworkBehaviour
         ));
 
 
-        OnUnoClick();
+        ShowReplacedMessageClientRpc(playerIndex);
+        DisableUnoBtn();
+        if (turnEndedByTimeout)
+        {
+            turnEndedByTimeout = false;
+            return;
+        }
+        CardGameManager.PlaySound(uno_btn_clip);
     }
 
     IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
@@ -1881,13 +1912,15 @@ public class GamePlayManager : NetworkBehaviour
                 break;
             }
         }
-        if (userIndex >= 0 && _audioSource != null)
+        for (int i = 0; i < results.Length; i++)
         {
-            if (userIndex == 0 && music_win_clip != null)
-                _audioSource.PlayOneShot(music_win_clip);
-            else if (userIndex > 0 && music_loss_clip != null)
-                _audioSource.PlayOneShot(music_loss_clip);
+            bool didWin = (i == 0); // first is winner after sort
+            ulong clientId = MultiplayerManager.Instance.playerDataNetworkList[i].clientId;
+            PlayGameOverSoundClientRpc(didWin,
+                new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } } }
+            );
         }
+
 
         ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
@@ -1928,6 +1961,11 @@ public class GamePlayManager : NetworkBehaviour
     public void OnUnoClick()
     {
         DisableUnoBtn();
+        if (CurrentPlayer.wasTimeout)
+        { 
+            CurrentPlayer.wasTimeout = false;
+            return;
+        }
         CurrentPlayer.ShowMessage("Discarded", true);
         CurrentPlayer.unoClicked = true;
         CardGameManager.PlaySound(uno_btn_clip);
@@ -1959,6 +1997,49 @@ public class GamePlayManager : NetworkBehaviour
         if (remainingCardsCounterText != null)
             remainingCardsCounterText.text = cards != null ? cards.Count.ToString() : "0";
     }
+
+    [ClientRpc]
+    public void ShowTimeoutMessageClientRpc(int globalPlayerIndex)
+    {
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+        if (localIndex >= 0 && localIndex < players.Count)
+        {
+            players[localIndex].ShowMessage("Timeout", true, 1f);
+            players[localIndex].wasTimeout = true;
+        }
+    }
+
+
+    [ClientRpc]
+    public void ShowPowerMessageClientRpc(int globalPlayerIndex, string text, float duration = 1.5f)
+    {
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+        if (localIndex >= 0 && localIndex < players.Count)
+        {
+            players[localIndex].ShowMessage(text, true, duration);
+        }
+    }
+
+    [ClientRpc]
+    public void ShowReplacedMessageClientRpc(int globalPlayerIndex)
+    {
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+        if (localIndex >= 0 && localIndex < players.Count)
+            players[localIndex].ShowMessage("Replaced", true, 1.1f);
+    }
+
+    [ClientRpc]
+    public void PlayGameOverSoundClientRpc(bool didWin, ClientRpcParams rpcParams = default)
+    {
+        if (_audioSource != null)
+        {
+            if (didWin && music_win_clip != null)
+                _audioSource.PlayOneShot(music_win_clip);
+            else if (!didWin && music_loss_clip != null)
+                _audioSource.PlayOneShot(music_loss_clip);
+        }
+    }
+
 
 }
 

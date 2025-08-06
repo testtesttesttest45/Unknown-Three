@@ -123,7 +123,7 @@ public class Fiend : NetworkBehaviour
         }));
     }
 
-    private System.Collections.IEnumerator JumbleHandAnimation(Player2 player, List<Card> hand, int[] finalOrder, float duration, System.Action onComplete)
+    public IEnumerator JumbleHandAnimation(Player2 player, List<Card> hand, int[] finalOrder, float duration, System.Action onComplete)
     {
         float timer = 0f;
         int cardCount = hand.Count;

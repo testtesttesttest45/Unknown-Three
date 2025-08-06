@@ -5802,6 +5802,8 @@ MonoBehaviour:
   queenVoiceClip: {fileID: 8300000, guid: 8fc9b8111cee9ec40830c36417e25ee3, type: 3}
   kingVoiceClip: {fileID: 8300000, guid: 8e8dd2463188d734c8924ff326dc6285, type: 3}
   fiendVoiceClip: {fileID: 8300000, guid: b63e6bf01e1c7434cacf9d4eb6afa7d7, type: 3}
+  fiendRevengeVoiceClip: {fileID: 8300000, guid: 0d510ebb26c2ddf4d94ab48784b58a13,
+    type: 3}
   _audioSource: {fileID: 0}
   winnerUI: {fileID: 1849932710}
   remainingCardsCounterText: {fileID: 1488893242}
@@ -6288,7 +6290,7 @@ RectTransform:
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0, y: 0, z: 0}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 711634826}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
@@ -8067,7 +8069,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 150, y: -53}
+  m_AnchoredPosition: {x: 150, y: -80.59}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &517660853
@@ -13717,7 +13719,7 @@ RectTransform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0, y: 0, z: 0}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1027432572}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

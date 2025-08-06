@@ -25,6 +25,7 @@ public class Player2 : MonoBehaviour
     public bool pickFromDeck, unoClicked, choosingColor;
     [HideInInspector]
     public bool isInRoom = true;
+    public bool wasTimeout = false;
 
     public void SetAvatarProfile(AvatarProfile p)
     {

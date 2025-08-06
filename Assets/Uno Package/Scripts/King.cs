@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Netcode;
 using UnityEngine;
@@ -89,7 +90,6 @@ public class King : NetworkBehaviour
             }
     }
 
-
     [ServerRpc(RequireOwnership = false)]
     private void KingKillCardServerRpc(int globalSeat, int cardIndex, Vector3 pos, float zRot, ServerRpcParams rpcParams = default)
     {
@@ -101,26 +101,113 @@ public class King : NetworkBehaviour
         GamePlayManager.instance.FreezeTimerUI();
         ulong killerClientId = rpcParams.Receive.SenderClientId;
 
+        // Determine global seat of killer (King user)
+        int killerGlobalSeat = -1;
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < playerList.Count; i++)
+            if (playerList[i].clientId == killerClientId)
+                killerGlobalSeat = i;
+
+        // Was target an opponent?
+        bool isOpponent = (killerGlobalSeat != globalSeat);
+
+        // Was the killed card a Fiend?
+        var targetPlayer = GamePlayManager.instance.players[GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat)];
+        var killedCard = targetPlayer.cardsPanel.cards[cardIndex];
+        bool killedWasFiend = (killedCard != null && killedCard.Value == CardValue.Fiend);
+
         KingKillCardClientRpc(globalSeat, cardIndex);
 
-        KingRefillHandAfterDelay(globalSeat, cardIndex, pos, zRot, killerClientId);
+        // Pass all info
+        KingRefillHandAfterDelay(globalSeat, cardIndex, pos, zRot, killerGlobalSeat, isOpponent, killedWasFiend);
     }
 
-    private async void KingRefillHandAfterDelay(int globalSeat, int cardIndex, Vector3 toPos, float toZRot, ulong killerClientId)
+
+    private async void KingRefillHandAfterDelay(
+    int globalSeat, int cardIndex, Vector3 toPos, float toZRot, int killerGlobalSeat, bool isOpponent, bool killedWasFiend)
     {
         GamePlayManager.instance.isKingRefillPhase = true;
         await System.Threading.Tasks.Task.Delay(1000);
 
         var gpm = GamePlayManager.instance;
-        if (gpm.cards.Count == 0) return; // no cards left to refill
+        if (gpm.cards.Count == 0) return;
 
         SerializableCard topCard = gpm.cards[gpm.cards.Count - 1];
         gpm.cards.RemoveAt(gpm.cards.Count - 1);
 
-        KingRefillHandClientRpc(globalSeat, cardIndex, topCard, gpm.cards.ToArray()); 
+        KingRefillHandClientRpc(globalSeat, cardIndex, topCard, gpm.cards.ToArray());
+
         GamePlayManager.instance.isKingRefillPhase = false;
-        
+
+        // --- Fiend's Revenge logic ---
+        if (killedWasFiend && isOpponent && killerGlobalSeat >= 0)
+        {
+            // 1. Broadcast SFX to all, but show message only to killer (King user)
+            ShowFiendRevengeClientRpc(globalSeat);
+
+            // 2. Now jumble the King user's hand and wait for the animation to finish before passing turn
+            await System.Threading.Tasks.Task.Delay(400); // Small delay for drama/sound
+            JumbleOwnHandClientRpc(killerGlobalSeat);
+            return;
+        }
+
+        // Otherwise, continue turn as usual
+        if (NetworkManager.Singleton.IsHost)
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.1f));
     }
+
+    [ClientRpc]
+    private void ShowFiendRevengeClientRpc(int victimGlobalSeat)
+    {
+        // Play sound for everyone
+        if (GamePlayManager.instance.fiendRevengeVoiceClip != null && GamePlayManager.instance._audioSource != null)
+            GamePlayManager.instance._audioSource.PlayOneShot(GamePlayManager.instance.fiendRevengeVoiceClip, 0.95f);
+
+        // Show the message ONLY on the victim's area, but for everyone
+        int victimLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(victimGlobalSeat);
+        var victimPlayer = GamePlayManager.instance.players[victimLocalSeat];
+        victimPlayer.ShowMessage("Fiend's Revenge", true, 2.2f);
+    }
+
+
+    [ClientRpc]
+    public void JumbleOwnHandClientRpc(int kingGlobalSeat)
+    {
+        int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(kingGlobalSeat);
+        var player = GamePlayManager.instance.players[localSeat];
+        var hand = player.cardsPanel.cards;
+
+        // Shuffle order
+        int cardCount = hand.Count;
+        List<int> indices = new List<int>();
+        for (int i = 0; i < cardCount; i++) indices.Add(i);
+        for (int i = cardCount - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
+        }
+
+        // All clients run the animation for this hand
+        player.StartCoroutine(Fiend.Instance.JumbleHandAnimation(player, hand, indices.ToArray(), 3.0f, () =>
+        {
+            // Only the host/server notifies turn advance
+            if (GamePlayManager.instance.IsHost && NetworkManager.Singleton.IsServer)
+                NotifyJumbleFinishedServerRpc();
+        }));
+    }
+
+
+    [ServerRpc(RequireOwnership = false)]
+    private void NotifyJumbleFinishedServerRpc(ServerRpcParams rpcParams = default)
+    {
+        // Only the server should advance the turn
+        if (NetworkManager.Singleton.IsHost || NetworkManager.Singleton.IsServer)
+        {
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+        }
+    }
+
+
 
     [ClientRpc]
     private void KingRefillHandClientRpc(int globalSeat, int cardIndex, SerializableCard refillCard, SerializableCard[] newDeck)
@@ -188,8 +275,8 @@ public class King : NetworkBehaviour
             GamePlayManager.instance.arrowObject.SetActive(false);
         }
 
-        if (NetworkManager.Singleton.IsHost)
-            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
+        //if (NetworkManager.Singleton.IsHost)
+        //    GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }
 
     [ClientRpc]
