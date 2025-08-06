@@ -29,7 +29,7 @@ public class GamePlayManager : NetworkBehaviour
     public Card _cardPrefab;
     public Transform cardDeckTransform;
     public Image cardWastePile;
-    public GameObject arrowObject, unoBtn, cardDeckBtn;
+    public GameObject arrowObject, arrowObject2, unoBtn, cardDeckBtn;
     public Popup colorChoose, playerChoose, noNetwork;
     public GameObject loadingView, rayCastBlocker;
     public Animator cardEffectAnimator;
@@ -81,6 +81,7 @@ public class GamePlayManager : NetworkBehaviour
     private HashSet<ulong> readyClientIds = new HashSet<ulong>();
 
     public WinnerUI winnerUI;
+    public TMPro.TextMeshProUGUI remainingCardsCounterText;
 
     [Header("Bot AI Tuning")]
     [Tooltip("Bot will only consider waste pile if card value is <= this value.")]
@@ -368,7 +369,6 @@ public class GamePlayManager : NetworkBehaviour
     CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
 };
 
-        // Add regular cards for all 4 suits (excluding "0")
         for (int j = 0; j < 4; j++)
         {
             foreach (var val in values)
@@ -378,10 +378,9 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
-        // Add ONE unique "0" card (Type.Other or any suit you prefer)
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
-
+        UpdateRemainingCardsCounter();
     }
 
     private IEnumerator StartPeekingPhase()
@@ -394,6 +393,7 @@ public class GamePlayManager : NetworkBehaviour
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
 
         arrowObject.SetActive(false);
+        arrowObject2.SetActive(false);
         DisableDeckClickability();
         for (int i = 0; i < cardDeckTransform.childCount; i++)
         {
@@ -415,6 +415,9 @@ public class GamePlayManager : NetworkBehaviour
             card.IsOpen = false;
             card.onClick = null;
 
+            // ✨ SHOW GLOW IF CAN PEEK
+            card.ShowGlow(canPeek);
+
             if (canPeek)
             {
                 card.onClick = (c) =>
@@ -422,10 +425,16 @@ public class GamePlayManager : NetworkBehaviour
                     if (c.PeekMode && c.IsClickable)
                     {
                         c.IsOpen = true;
+                        c.ShowGlow(false);
                     }
                 };
             }
+            else
+            {
+                card.ShowGlow(false);
+            }
         }
+
 
         for (int pi = 1; pi < players.Count; pi++)
         {
@@ -448,9 +457,11 @@ public class GamePlayManager : NetworkBehaviour
             card.IsClickable = false;
             card.PeekMode = false;
             card.onClick = null;
+            card.ShowGlow(false);
         }
 
         isPeekingPhase = false;
+
 
         if (IsHost)
         {
@@ -462,6 +473,7 @@ public class GamePlayManager : NetworkBehaviour
     public void DisableDeckClickability()
     {
         arrowObject.SetActive(false);
+        arrowObject2.SetActive(false);
         int n = cardDeckTransform.childCount;
         for (int i = 0; i < n; i++)
         {
@@ -539,8 +551,7 @@ public class GamePlayManager : NetworkBehaviour
         DisableAllHandCardGlowAllPlayers();
         unoBtn.SetActive(false);
         arrowObject.SetActive(false);
-
-        
+        arrowObject2.SetActive(false);
 
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
 
@@ -563,10 +574,16 @@ public class GamePlayManager : NetworkBehaviour
             deckInteractionLocked = false;
             EnableDeckClick();
             UpdateDeckClickability();
+
+            if (ShouldShowWasteArrow())
+                arrowObject2.SetActive(true);
+            else
+                arrowObject2.SetActive(false);
         }
         else
         {
             arrowObject.SetActive(false);
+            arrowObject2.SetActive(false);
             UpdateDeckClickability();
         }
 
@@ -968,6 +985,7 @@ public class GamePlayManager : NetworkBehaviour
         // Draw the top card
         SerializableCard drawn = cards[cards.Count - 1];
         cards.RemoveAt(cards.Count - 1);
+        UpdateRemainingCardsCounter();
 
         Player2 p = players[playerIndex];
         Card replacedCard = p.cardsPanel.cards[handIndex];
@@ -1159,6 +1177,7 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         UpdateDeckClickability();
+        UpdateRemainingCardsCounter();
     }
 
     public void OnDeckClickedByPlayer()
@@ -1193,6 +1212,9 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.GetComponent<Button>().interactable = true;
         unoBtn.GetComponent<Button>().onClick.RemoveAllListeners();
         unoBtn.GetComponent<Button>().onClick.AddListener(OnDiscardClicked);
+
+        string btnText = IsSpecialCard(card.Value) ? "ACTIVATE" : "DISCARD";
+        unoBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>().text = btnText;
 
         EnableHandCardReplacementGlow();
 
@@ -1240,6 +1262,7 @@ public class GamePlayManager : NetworkBehaviour
 
         deckInteractionLocked = true;
         arrowObject.SetActive(false);
+        arrowObject2.SetActive(false);
         int n = cardDeckTransform.childCount;
         for (int i = 0; i < n; i++)
         {
@@ -1275,6 +1298,7 @@ public class GamePlayManager : NetworkBehaviour
 
 
         cards.RemoveAt(cards.Count - 1);
+        UpdateRemainingCardsCounter();
         wasteCards.Add(topCard);
 
         ShowWastePileCardClientRpc(cardType, cardValue);
@@ -1332,6 +1356,7 @@ public class GamePlayManager : NetworkBehaviour
 
         SerializableCard drawn = cards[cards.Count - 1];
         cards.RemoveAt(cards.Count - 1);
+        UpdateRemainingCardsCounter();
 
         wasteCards.Add(drawn);
 
@@ -1611,6 +1636,7 @@ public class GamePlayManager : NetworkBehaviour
         {
             unoBtn.SetActive(false);
             arrowObject.SetActive(false);
+            arrowObject2.SetActive(false);
         }
     }
 
@@ -1639,6 +1665,7 @@ public class GamePlayManager : NetworkBehaviour
 
         SerializableCard drawn = cards[cards.Count - 1];
         cards.RemoveAt(cards.Count - 1);
+        UpdateRemainingCardsCounter();
 
         Player2 p = players[playerIndex];
         Card replacedCard = p.cardsPanel.cards[handIndex];
@@ -1740,6 +1767,7 @@ public class GamePlayManager : NetworkBehaviour
         {
             unoBtn.SetActive(false);
             arrowObject.SetActive(false);
+            arrowObject2.SetActive(false);
         }
 
         if (IsHost)
@@ -1844,13 +1872,30 @@ public class GamePlayManager : NetworkBehaviour
             };
         }
 
-        ShowGameOverClientRpc();
+        int userIndex = -1;
+        for (int i = 0; i < results.Length; i++)
+        {
+            if (results[i].isUserPlayer)
+            {
+                userIndex = i;
+                break;
+            }
+        }
+        if (userIndex >= 0 && _audioSource != null)
+        {
+            if (userIndex == 0 && music_win_clip != null)
+                _audioSource.PlayOneShot(music_win_clip);
+            else if (userIndex > 0 && music_loss_clip != null)
+                _audioSource.PlayOneShot(music_loss_clip);
+        }
 
+        ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
 
         if (winnerUI != null)
             winnerUI.ShowWinnersFromNetwork(results);
     }
+
 
 
     [ClientRpc]
@@ -1883,7 +1928,7 @@ public class GamePlayManager : NetworkBehaviour
     public void OnUnoClick()
     {
         DisableUnoBtn();
-        CurrentPlayer.ShowMessage("Uno!", true);
+        CurrentPlayer.ShowMessage("Discarded", true);
         CurrentPlayer.unoClicked = true;
         CardGameManager.PlaySound(uno_btn_clip);
     }
@@ -1892,6 +1937,27 @@ public class GamePlayManager : NetworkBehaviour
     public void FreezeTimerUI()
     {
         BroadcastTurnTimerClientRpc(turnTimerLeft, turnTimerDuration);
+    }
+
+    private bool IsSpecialCard(CardValue value)
+    {
+        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend;
+    }
+
+    private bool ShouldShowWasteArrow()
+    {
+        Card top = GetTopWasteCard();
+        if (top == null)
+            return false;
+        if (top.killedOutline != null && top.killedOutline.activeSelf)
+            return false;
+        return true;
+    }
+
+    private void UpdateRemainingCardsCounter()
+    {
+        if (remainingCardsCounterText != null)
+            remainingCardsCounterText.text = cards != null ? cards.Count.ToString() : "0";
     }
 
 }

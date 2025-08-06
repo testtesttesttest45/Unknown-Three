@@ -283,12 +283,12 @@ MonoBehaviour:
   killedOutline: {fileID: 6233306882889489139}
   markedOutline: {fileID: 4813852767560408802}
   eyeOutline: {fileID: 4284386107086210936}
+  specialOutline: {fileID: 5729597669257014210}
   label1: {fileID: 114254947193000722}
   label2: {fileID: 114969451944261624}
   label3: {fileID: 114176573625267370}
   moveSpeed: 0.3
   point: 0
-  specialOutline: {fileID: 5729597669257014210}
 --- !u!223 &4727676595441614024
 Canvas:
   m_ObjectHideFlags: 0
@@ -826,7 +826,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6646697277013177370}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 4.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -835,7 +835,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 105, y: 152}
+  m_SizeDelta: {x: 114.8, y: 160.8}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2384811836539220071
 CanvasRenderer:
@@ -858,7 +858,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.65882355}
+  m_Color: {r: 0.91722137, g: 0.9685534, b: 0, a: 0.65882355}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
