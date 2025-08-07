@@ -140,7 +140,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &65167660
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5805,6 +5805,7 @@ MonoBehaviour:
     type: 3}
   jackSpecialVoiceClip: {fileID: 8300000, guid: c1359e95539f30b45b909bb287edc47c,
     type: 3}
+  goldenJackVoiceClip: {fileID: 8300000, guid: 37ca66f441a2d2445bbfa71458b4d891, type: 3}
   _audioSource: {fileID: 0}
   winnerUI: {fileID: 1849932710}
   remainingCardsCounterText: {fileID: 1488893242}
@@ -11864,7 +11865,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1024460537
 RectTransform:
   m_ObjectHideFlags: 0
@@ -26093,7 +26094,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1720348325}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 

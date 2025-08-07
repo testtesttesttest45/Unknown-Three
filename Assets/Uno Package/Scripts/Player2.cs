@@ -196,7 +196,7 @@ public class Player2 : MonoBehaviour
             if (c == null) continue;
             if (c.Value >= CardValue.Zero && c.Value <= CardValue.Ten)
                 points += (int)c.Value;
-            else // J, Q, K, Fiend, Skip
+            else // J, Q, K, Fiend, Skip, Golden Jack
                 points += 10;
         }
         return points;
