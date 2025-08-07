@@ -180,11 +180,12 @@ public class King : NetworkBehaviour
         else if (killedWasGoldenJack && isOpponent)
         {
             ShowGoldenJackRevengeClientRpc(killerGlobalSeat, globalSeat, killerClientId);
-            await System.Threading.Tasks.Task.Delay(400);
+            await System.Threading.Tasks.Task.Delay(3000);
 
             if (NetworkManager.Singleton.IsHost)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
         }
+
         else
         {
             if (NetworkManager.Singleton.IsHost)
@@ -206,6 +207,9 @@ public class King : NetworkBehaviour
     [ClientRpc]
     private void ShowGoldenJackRevengeClientRpc(int kingUserGlobalSeat, int goldenJackVictimGlobalSeat, ulong killerClientId)
     {
+        if (GamePlayManager.instance.goldenJackRevengeVoiceClip != null && GamePlayManager.instance._audioSource != null)
+            GamePlayManager.instance._audioSource.PlayOneShot(GamePlayManager.instance.goldenJackRevengeVoiceClip, 0.95f);
+
         ulong myClientId = NetworkManager.Singleton.LocalClientId;
         int kingUserLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(kingUserGlobalSeat);
         int victimLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(goldenJackVictimGlobalSeat);
@@ -383,12 +387,16 @@ public class King : NetworkBehaviour
         wasteObj.CalcPoint();
         wasteObj.gameObject.AddComponent<WastePile>().Initialize(wasteObj);
 
-        // Only show killed outline if NOT Golden Jack
         if (killed.Value != CardValue.GoldenJack)
+        {
             wasteObj.ShowKilledOutline(true);
-
-        wasteObj.IsClickable = false;
-        wasteObj.onClick = null;
+            wasteObj.IsClickable = false;
+            wasteObj.onClick = null;
+        }
+        else
+        {
+            wasteObj.ShowKilledOutline(false);
+        }
 
         float randomRot = Random.Range(-50, 50f);
         GamePlayManager.instance.StartCoroutine(

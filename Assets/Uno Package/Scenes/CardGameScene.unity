@@ -5806,6 +5806,8 @@ MonoBehaviour:
   jackSpecialVoiceClip: {fileID: 8300000, guid: c1359e95539f30b45b909bb287edc47c,
     type: 3}
   goldenJackVoiceClip: {fileID: 8300000, guid: 37ca66f441a2d2445bbfa71458b4d891, type: 3}
+  goldenJackRevengeVoiceClip: {fileID: 8300000, guid: b1261e50452b1eb48bc56f45e5436501,
+    type: 3}
   _audioSource: {fileID: 0}
   winnerUI: {fileID: 1849932710}
   remainingCardsCounterText: {fileID: 1488893242}
