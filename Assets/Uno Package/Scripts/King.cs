@@ -128,16 +128,17 @@ public class King : NetworkBehaviour
         var targetPlayer = GamePlayManager.instance.players[GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat)];
         var killedCard = targetPlayer.cardsPanel.cards[cardIndex];
         bool killedWasFiend = (killedCard != null && killedCard.Value == CardValue.Fiend);
-
+        bool killedWasGoldenJack = (killedCard != null && killedCard.Value == CardValue.GoldenJack);
+        
         KingKillCardClientRpc(globalSeat, cardIndex);
 
-        KingRefillHandAfterDelay(globalSeat, cardIndex, pos, zRot, killerGlobalSeat, isOpponent, killedWasFiend, actingBotLocalSeat);
+        KingRefillHandAfterDelay(globalSeat, cardIndex, pos, zRot, killerGlobalSeat, isOpponent, killedWasFiend, killedWasGoldenJack, actingBotLocalSeat, killerClientId);
     }
 
     private async void KingRefillHandAfterDelay(
     int globalSeat, int cardIndex, Vector3 toPos, float toZRot,
-    int killerGlobalSeat, bool isOpponent, bool killedWasFiend,
-    int actingBotLocalSeat = -1)
+    int killerGlobalSeat, bool isOpponent, bool killedWasFiend, bool killedWasGoldenJack,
+    int actingBotLocalSeat = -1, ulong killerClientId = 0)
     {
         GamePlayManager.instance.isKingRefillPhase = true;
         await System.Threading.Tasks.Task.Delay(1000);
@@ -158,7 +159,6 @@ public class King : NetworkBehaviour
             await System.Threading.Tasks.Task.Delay(400);
 
             int killerLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(killerGlobalSeat);
-            ulong killerClientId = 0;
             if (killerGlobalSeat >= 0 && killerGlobalSeat < MultiplayerManager.Instance.playerDataNetworkList.Count)
                 killerClientId = MultiplayerManager.Instance.playerDataNetworkList[killerGlobalSeat].clientId;
 
@@ -177,6 +177,14 @@ public class King : NetworkBehaviour
                 }
             }
         }
+        else if (killedWasGoldenJack && isOpponent)
+        {
+            ShowGoldenJackRevengeClientRpc(killerGlobalSeat, globalSeat, killerClientId);
+            await System.Threading.Tasks.Task.Delay(400);
+
+            if (NetworkManager.Singleton.IsHost)
+                GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+        }
         else
         {
             if (NetworkManager.Singleton.IsHost)
@@ -194,6 +202,55 @@ public class King : NetworkBehaviour
         var victimPlayer = GamePlayManager.instance.players[victimLocalSeat];
         victimPlayer.ShowMessage("Fiend's Revenge", true, 2f);
     }
+
+    [ClientRpc]
+    private void ShowGoldenJackRevengeClientRpc(int kingUserGlobalSeat, int goldenJackVictimGlobalSeat, ulong killerClientId)
+    {
+        ulong myClientId = NetworkManager.Singleton.LocalClientId;
+        int kingUserLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(kingUserGlobalSeat);
+        int victimLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(goldenJackVictimGlobalSeat);
+        var kingPlayer = GamePlayManager.instance.players[kingUserLocalSeat];
+        var victimPlayer = GamePlayManager.instance.players[victimLocalSeat];
+
+        // 1. Show the revenge message **on the victim immediately**
+        if (victimPlayer != null)
+        {
+            victimPlayer.ShowMessage("Golden Jack's Revenge!", true, 2.5f);
+        }
+
+        // 2. Show all of king user's hand cards to everyone except the killer.
+        //    The killer sees only flash effect (no value revealed).
+        bool isKiller = (myClientId == killerClientId);
+
+        for (int i = 0; i < kingPlayer.cardsPanel.cards.Count; i++)
+        {
+            var card = kingPlayer.cardsPanel.cards[i];
+            if (card != null)
+            {
+                if (isKiller)
+                {
+                    // Killer: flash only, do not reveal value.
+                    card.FlashEyeOutline();
+                }
+                else
+                {
+                    // Others: reveal card and flash.
+                    card.IsOpen = true;
+                    card.FlashMarkedOutline();
+                    kingPlayer.StartCoroutine(HideCardAfterDelay(card, 3.0f));
+                }
+            }
+        }
+    }
+
+    private IEnumerator HideCardAfterDelay(Card card, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (card != null)
+            card.IsOpen = false;
+    }
+
+
 
     private bool IsBotClientId(ulong clientId) => clientId >= 9000;
 
@@ -326,7 +383,9 @@ public class King : NetworkBehaviour
         wasteObj.CalcPoint();
         wasteObj.gameObject.AddComponent<WastePile>().Initialize(wasteObj);
 
-        wasteObj.ShowKilledOutline(true);
+        // Only show killed outline if NOT Golden Jack
+        if (killed.Value != CardValue.GoldenJack)
+            wasteObj.ShowKilledOutline(true);
 
         wasteObj.IsClickable = false;
         wasteObj.onClick = null;
@@ -339,6 +398,7 @@ public class King : NetworkBehaviour
 
         player.RemoveCard(killed, false);
     }
+
 
     public void StartBotKingPhase(ulong botClientId)
     {
