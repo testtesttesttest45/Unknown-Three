@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -90,6 +91,33 @@ public class CardGameScene : MonoBehaviour
 
     public void CloseGame()
     {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (NetworkManager.Singleton.IsHost)
+            {
+                NetworkManager.Singleton.Shutdown();
+                LobbyManager.Instance?.DeleteLobby();
+            }
+            else
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+        }
+
+        if (GamePlayManager.instance != null)
+            GamePlayManager.instance.Cleanup();
+        GamePlayManager.instance = null;
+        CardGameScene.instance = null;
+
+        var multiplayerObj = GameObject.FindObjectOfType<MultiplayerManager>();
+        if (multiplayerObj != null)
+        {
+            multiplayerObj.Cleanup();
+            Destroy(multiplayerObj.gameObject);
+        }
+
         UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScene");
     }
+
+
 }

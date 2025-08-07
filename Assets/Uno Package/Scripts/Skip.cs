@@ -21,6 +21,13 @@ public class Skip : NetworkBehaviour
         GamePlayManager.instance.NextPlayerIndex();
         int newGlobalIndex = GamePlayManager.instance.GetGlobalIndexFromLocal(GamePlayManager.instance.currentPlayerIndex);
 
+        StartCoroutine(WaitAndStartNextTurn(newGlobalIndex));
+    }
+
+    private IEnumerator WaitAndStartNextTurn(int newGlobalIndex)
+    {
+        yield return new WaitForSeconds(2.0f);
+
         GamePlayManager.instance.StartPlayerTurnForAllClientRpc(newGlobalIndex);
 
         if (NetworkManager.Singleton.IsHost && GamePlayManager.instance.IsCurrentPlayerBot())
@@ -28,7 +35,6 @@ public class Skip : NetworkBehaviour
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.RunBotTurn(newGlobalIndex));
         }
     }
-
 
     [ClientRpc]
     void ShowSkippedPlayerClientRpc(int globalIndex)

@@ -20,24 +20,23 @@ public class PlayerCards : MonoBehaviour
     {
         if (!autoUpdatePositions) return;
 
+        int slotCount = cards.Count; // always 3
+        float totalWidth = GetComponent<RectTransform>().sizeDelta.x;
         float space = 0;
         float start = 0;
-        float totalWidth = GetComponent<RectTransform>().sizeDelta.x;
-        int realCount = 0;
-        for (int i = 0; i < cards.Count; i++) if (cards[i] != null) realCount++;
-        if (realCount > 1)
+
+        if (slotCount > 1)
         {
-            space = (totalWidth - cardSize.x) / (realCount - 1);
+            space = (totalWidth - cardSize.x) / (slotCount - 1);
             if (space > maxSpace)
             {
                 space = maxSpace;
-                totalWidth = (space * (realCount - 1)) + cardSize.x;
+                totalWidth = (space * (slotCount - 1)) + cardSize.x;
             }
             start = (totalWidth / -2) + cardSize.x / 2;
         }
 
-        int idx = 0;
-        for (int i = 0; i < cards.Count; i++)
+        for (int i = 0; i < slotCount; i++)
         {
             if (cards[i] == null) continue;
             RectTransform item = cards[i].GetComponent<RectTransform>();
@@ -46,11 +45,10 @@ public class PlayerCards : MonoBehaviour
             item.anchorMin = Vector2.one * .5f;
             item.pivot = Vector2.one * .5f;
             item.sizeDelta = cardSize;
-            cards[i].SetTargetPosAndRot(new Vector3(start, 0f, 0f), 0f);
-            start += space;
-            idx++;
+            cards[i].SetTargetPosAndRot(new Vector3(start + space * i, 0f, 0f), 0f);
         }
     }
+
 
     public void Clear()
     {

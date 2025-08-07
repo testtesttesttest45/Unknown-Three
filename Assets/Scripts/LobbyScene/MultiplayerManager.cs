@@ -550,13 +550,26 @@ public class MultiplayerManager : NetworkBehaviour
         TryStartGameIfReady();
     }
 
-    public int GetMyGlobalSeat()
+    public void Cleanup()
     {
-        ulong myId = NetworkManager.Singleton.LocalClientId;
-        var list = MultiplayerManager.Instance.playerDataNetworkList;
-        for (int i = 0; i < list.Count; i++)
-            if (list[i].clientId == myId)
-                return i;
-        return -1;
+        // Unsubscribe from Netcode events
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback -= NetworkManager_OnClientConnectedCallback;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= NetworkManager_Server_OnClientDisconnectCallback;
+            NetworkManager.Singleton.ConnectionApprovalCallback -= NetworkManager_ConnectionApprovalCallback;
+            // (For clients)
+            NetworkManager.Singleton.OnClientConnectedCallback -= NetworkManager_Client_OnClientConnectedCallback;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= NetworkManager_Client_OnClientDisconnectCallback;
+        }
+
+        // Unsubscribe from NetworkList events
+        if (playerDataNetworkList != null)
+            playerDataNetworkList.OnListChanged -= PlayerDataNetworkList_OnListChanged;
+
+
+        // Null out static instance
+        Instance = null;
     }
+
 }

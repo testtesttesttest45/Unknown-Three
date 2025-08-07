@@ -16,6 +16,7 @@ public class Fiend : NetworkBehaviour
     [Header("Audio")]
     private AudioSource _audioSource;
     public AudioClip swapCardClip;
+    [SerializeField] Toggle jumbleToggle;
 
     void Awake()
     {
@@ -28,6 +29,8 @@ public class Fiend : NetworkBehaviour
     public void ShowFiendPopup()
     {
         fiendPopup.SetActive(true);
+        if (jumbleToggle != null)
+            jumbleToggle.isOn = false;
 
         foreach (Transform child in avatarPanel)
             Destroy(child.gameObject);
@@ -41,7 +44,6 @@ public class Fiend : NetworkBehaviour
             if (pd.clientId == myClientId)
                 continue; // skip self
 
-            // Find the corresponding Player2 for this global seat
             int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat);
             var p = GamePlayManager.instance.players[localSeat];
 
@@ -66,7 +68,18 @@ public class Fiend : NetworkBehaviour
     private void OnOpponentSelected(int targetSeat)
     {
         fiendPopup.SetActive(false);
-        RequestJumbleHandServerRpc(targetSeat);
+
+        if (jumbleToggle != null && jumbleToggle.isOn)
+        {
+            // FAKE jumble for all clients (no real data change)
+            RequestVisualJumbleHandServerRpc(targetSeat);
+        }
+        else
+        {
+            // REAL jumble, notify server to perform and sync
+            RequestJumbleHandServerRpc(targetSeat);
+        }
+
     }
 
 
@@ -104,90 +117,78 @@ public class Fiend : NetworkBehaviour
         var player = GamePlayManager.instance.players[localSeat];
         var hand = player.cardsPanel.cards;
 
-        // Start jumbling animation for 3 seconds, then apply new order
-        player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, () =>
+        player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, true, () =>
         {
-            // After animation, reorder the hand list to match newOrder
-            List<Card> oldHand = new List<Card>(hand);
-            List<Card> newHand = new List<Card>();
-            foreach (int idx in newOrder)
-                newHand.Add(oldHand[idx]);
-            player.cardsPanel.cards = newHand;
-            for (int i = 0; i < newHand.Count; i++)
-                newHand[i].cardIndex = i;
-            player.cardsPanel.UpdatePos();
-
-            // After jumble, host proceeds to next turn
             if (IsHost && NetworkManager.Singleton.IsServer)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
         }));
     }
 
-    public IEnumerator JumbleHandAnimation(Player2 player, List<Card> hand, int[] finalOrder, float duration, System.Action onComplete)
+    public IEnumerator JumbleHandAnimation(Player2 player, List<Card> hand, int[] finalOrder, float duration, bool updateCardData, System.Action onComplete)
     {
         float timer = 0f;
         int cardCount = hand.Count;
 
-        // Cache local positions of card slots (they should already be correct)
         Vector3[] slotPositions = new Vector3[cardCount];
         for (int i = 0; i < cardCount; i++)
             slotPositions[i] = hand[i].transform.localPosition;
 
-        // We will random swap pairs and move them, over and over
+        List<Card> workingHand = updateCardData ? hand : new List<Card>(hand);
+
         while (timer < duration)
         {
-            // Randomly choose two different indices
             int a = Random.Range(0, cardCount);
             int b;
             do { b = Random.Range(0, cardCount); } while (b == a);
 
-            // Move each to the other's slot over 0.2 seconds
-            Vector3 posA = hand[a].transform.localPosition;
-            Vector3 posB = hand[b].transform.localPosition;
+            Vector3 posA = workingHand[a].transform.localPosition;
+            Vector3 posB = workingHand[b].transform.localPosition;
 
             float elapsed = 0f;
             float swapAnim = 0.18f;
             while (elapsed < swapAnim)
             {
                 float t = elapsed / swapAnim;
-                hand[a].transform.localPosition = Vector3.Lerp(posA, posB, t);
-                hand[b].transform.localPosition = Vector3.Lerp(posB, posA, t);
+                workingHand[a].transform.localPosition = Vector3.Lerp(posA, posB, t);
+                workingHand[b].transform.localPosition = Vector3.Lerp(posB, posA, t);
                 elapsed += Time.deltaTime;
                 yield return null;
             }
-            hand[a].transform.localPosition = posB;
-            hand[b].transform.localPosition = posA;
+            workingHand[a].transform.localPosition = posB;
+            workingHand[b].transform.localPosition = posA;
 
-            // Swap them in the hand list (so future swaps use up-to-date indices)
-            var temp = hand[a];
-            hand[a] = hand[b];
-            hand[b] = temp;
+            var temp = workingHand[a];
+            workingHand[a] = workingHand[b];
+            workingHand[b] = temp;
 
             if (swapCardClip != null && _audioSource != null)
                 _audioSource.PlayOneShot(swapCardClip);
             timer += swapAnim;
         }
 
-        // Pause for extra effect
         yield return new WaitForSeconds(0.2f);
 
         // Snap to final order and update positions
-        List<Card> oldHand = new List<Card>(hand);
+        List<Card> oldHand = new List<Card>(workingHand);
         List<Card> newHand = new List<Card>();
         for (int i = 0; i < finalOrder.Length; i++)
         {
             Card c = oldHand[finalOrder[i]];
             newHand.Add(c);
-            // Place at correct slot
             c.transform.localPosition = slotPositions[i];
         }
-        player.cardsPanel.cards = newHand;
-        for (int i = 0; i < newHand.Count; i++)
-            newHand[i].cardIndex = i;
+        if (updateCardData)
+        {
+            player.cardsPanel.cards.Clear();
+            player.cardsPanel.cards.AddRange(newHand);
+            for (int i = 0; i < newHand.Count; i++)
+                newHand[i].cardIndex = i;
+        }
         player.cardsPanel.UpdatePos();
 
         onComplete?.Invoke();
     }
+
 
     public void HideFiendPopup()
     {
@@ -201,7 +202,6 @@ public class Fiend : NetworkBehaviour
 
     private IEnumerator BotFiendJumbleRoutine(ulong botClientId)
     {
-        // Wait a short moment so it doesn’t feel instant
         yield return new WaitForSeconds(Random.Range(1f, 2f));
 
         var gpm = GamePlayManager.instance;
@@ -223,5 +223,50 @@ public class Fiend : NetworkBehaviour
             Receive = new ServerRpcReceiveParams { SenderClientId = botClientId }
         });
     }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestVisualJumbleHandServerRpc(int seatIndex, ServerRpcParams rpcParams = default)
+    {
+        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
+        {
+            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
+            GamePlayManager.instance.turnTimeoutCoroutine = null;
+        }
+        GamePlayManager.instance.FreezeTimerUI();
+        // Build a random visual shuffle order
+        var hand = GamePlayManager.instance.players[seatIndex].cardsPanel.cards;
+        int cardCount = hand.Count;
+        List<int> indices = new List<int>();
+        for (int i = 0; i < cardCount; i++) indices.Add(i);
+        for (int i = cardCount - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
+        }
+        // Send to all clients for animated jumble (visual only)
+        VisualJumbleHandClientRpc(seatIndex, indices.ToArray());
+    }
+
+    [ClientRpc]
+    private void VisualJumbleHandClientRpc(int seatIndex, int[] newOrder)
+    {
+        GamePlayManager.instance.FreezeTimerUI();
+
+        int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(seatIndex);
+        var player = GamePlayManager.instance.players[localSeat];
+        var hand = player.cardsPanel.cards;
+
+        player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, false, () =>
+        {
+            player.cardsPanel.UpdatePos();
+            if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.IsServer)
+            {
+                GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+            }
+        }));
+    }
+
+
+
 
 }
