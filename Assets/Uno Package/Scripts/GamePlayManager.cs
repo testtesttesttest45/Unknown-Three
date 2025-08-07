@@ -17,7 +17,6 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip uno_btn_clip;
     public AudioClip choose_color_clip;
 
-
     public float cardDealTime = 3f;
     public Card _cardPrefab;
     public Transform cardDeckTransform;
@@ -54,7 +53,7 @@ public class GamePlayManager : NetworkBehaviour
     public List<SerializableCard> wasteCards;
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
-    public float turnTimerDuration = 30f;
+    public float turnTimerDuration = 6f;
     private float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
@@ -140,6 +139,7 @@ public class GamePlayManager : NetworkBehaviour
         Debug.Log("[GamePlayManager] OnNetworkSpawn! Safe to set up player panels.");
         SetupAllPlayerPanels();
 
+        // Clients always notify host they are ready
         if (!IsHost)
             NotifyReadyServerRpc();
     }
@@ -295,7 +295,7 @@ public class GamePlayManager : NetworkBehaviour
                 card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, player.cardsPanel.transform);
                 card.Type = sc.Type;
                 card.Value = sc.Value;
-                card.IsOpen = true;
+                card.IsOpen = (localSeat == 0);
                 card.CalcPoint();
                 card.name = $"{sc.Type}_{sc.Value}";
                 card.localSeat = localSeat;
@@ -362,8 +362,10 @@ public class GamePlayManager : NetworkBehaviour
 
         List<CardValue> values = new List<CardValue>
 {
-     
-     CardValue.Jack,CardValue.King, CardValue.Fiend,
+
+     CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
+    CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
+    CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
 };
 
         for (int j = 0; j < 4; j++)
@@ -374,19 +376,6 @@ public class GamePlayManager : NetworkBehaviour
                 cards.Add(card);
             }
         }
-        // add 4 more king and 4 more fiend
-        for (int j = 0; j < 4; j++)
-        {
-            cards.Add(new SerializableCard(CardType.Other, CardValue.King));
-            cards.Add(new SerializableCard(CardType.Other, CardValue.Fiend));
-        }
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
@@ -828,9 +817,10 @@ public class GamePlayManager : NetworkBehaviour
 
     private IEnumerator ExposeZeroAfterDelayCoroutine(ulong jackUserClientId)
     {
+        // 1 second suspense delay!
         yield return new WaitForSeconds(1.0f);
 
-        // JACK SPECIAL BONUS: Find the player (not Jack user) who has the Zero
+        // --- JACK SPECIAL BONUS: Find the player (not Jack user) who has the Zero
         int zeroHolderPlayerIndex = -1;
         int zeroHolderCardIndex = -1;
 
@@ -882,11 +872,12 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void ShowZeroHolderTimerEffectClientRpc(int globalPlayerIndex)
     {
-        // bounds check
+        // Defensive: bounds check
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
         if (localIndex < 0 || localIndex >= players.Count) return;
         var player = players[localIndex];
 
+        // Turn ON the timer object and set its color to red
         if (player.timerOjbect != null)
         {
             player.timerOjbect.SetActive(true);
@@ -904,7 +895,7 @@ public class GamePlayManager : NetworkBehaviour
 
         if (player.timerOjbect != null)
         {
-            // Restore color 
+            // Restore to gold color #927620
             var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
             if (img != null)
                 img.color = new Color(0.572f, 0.463f, 0.125f, 1f);
@@ -913,11 +904,15 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+
+
+    // Coroutine to wait before ending turn
     private IEnumerator JackZeroBonusEndTurnCoroutine()
     {
-        yield return new WaitForSeconds(3.0f);
+        yield return new WaitForSeconds(3.0f); // Wait for bonus sound
         OnJackRevealDoneServerRpc();
     }
+
 
     [ClientRpc]
     void FlashMarkedOutlineClientRpc(int playerIndex, int cardIndex, ulong jackUserClientId, bool jackUserIsBot, ClientRpcParams rpcParams = default)
@@ -932,6 +927,7 @@ public class GamePlayManager : NetworkBehaviour
         card.IsOpen = false;
         card.FlashEyeOutline();
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     void OnJackRevealDoneServerRpc(ServerRpcParams rpcParams = default)
@@ -1014,7 +1010,7 @@ public class GamePlayManager : NetworkBehaviour
         if (cards.Count == 0)
             yield break;
 
-        // Try Waste Pile Steal
+        // 1. Try Waste Pile Steal
         Card wasteCard = GetTopWasteCard();
         bool canTakeWaste = false;
         SerializableCard wasteSer = default;
@@ -1048,8 +1044,9 @@ public class GamePlayManager : NetworkBehaviour
             yield break;
         }
 
+        // 2. Deck draw: decide what to do
         float roll = Random.Range(0, 100);
-        bool doReplace = roll < botDeckReplaceChance;
+        bool doReplace = roll < botDeckReplaceChance; // e.g. 20%
 
         if (cards.Count == 0) yield break;
         SerializableCard topDeckCard = cards[cards.Count - 1];
@@ -1112,7 +1109,7 @@ public class GamePlayManager : NetworkBehaviour
     }
 
 
-    // host-only, no ServerRpc
+    // host-only, no ServerRpc!
     private void DoWasteCardSwapForBot(int botLocalIndex, int handIndex, SerializableCard newCard, SerializableCard replacedCard)
     {
         int playerIndex = botLocalIndex;
@@ -1546,12 +1543,12 @@ public class GamePlayManager : NetworkBehaviour
 
             if (cards.Count == 0)
             {
-                // just a normal discard, no timer reset
+                // Powerless King: just a normal discard, no timer reset
                 StartCoroutine(DelayedNextPlayerTurn(1.0f));
                 return;
             }
 
-            // normal king phase
+            // Otherwise, do King phase as usual (reset timer, etc)
             ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
             if (IsHost)
                 ResetAndRestartTurnTimerCoroutine();
@@ -1658,14 +1655,16 @@ public class GamePlayManager : NetworkBehaviour
         }
         if (validTargets.Count == 0)
         {
+            Debug.LogWarning("[SimulateBotJackReveal] No valid target players!");
             botJackRevealActive = false;
             yield break;
         }
         int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
         int targetCardIndex = Random.Range(0, players[targetPlayerIndex].cardsPanel.cards.Count);
 
+        Debug.Log($"[SimulateBotJackReveal] Bot reveals playerIndex={targetPlayerIndex} cardIndex={targetCardIndex}");
 
-        // Flash eye outline to ALL real players except the bot (the one being Jack).
+        // 1. Flash eye outline to ALL real players except the bot (the one being Jack).
         List<ulong> realClientIds = new List<ulong>();
         foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
         {
@@ -1689,7 +1688,7 @@ public class GamePlayManager : NetworkBehaviour
 
         yield return new WaitForSeconds(1.0f);
 
-        // JACK SPECIAL BONUS: Find any player (except the bot himself) holding a Zero card.
+        // 2. JACK SPECIAL BONUS: Find any player (except the bot himself) holding a Zero card.
         int zeroHolderPlayerIndex = -1;
         for (int pi = 0; pi < players.Count; pi++)
         {
@@ -1722,12 +1721,14 @@ public class GamePlayManager : NetworkBehaviour
         }
         else
         {
-            yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(1.0f); // Wait a moment for realism
             OnJackRevealDoneServerRpc();
         }
 
         botJackRevealActive = false;
     }
+
+
 
     [ClientRpc]
     void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
@@ -1826,6 +1827,7 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+
     public void OnHandCardReplaceRequested(int handIndex)
     {
         if (isKingRefillPhase) return;
@@ -1859,6 +1861,7 @@ public class GamePlayManager : NetworkBehaviour
         wasteCards.Add(replacedSer);
 
         ReplaceHandCardClientRpc(playerIndex, handIndex, drawn, replacedSer, cards.ToArray(), wasteCards.ToArray(), false);
+
     }
 
     public IEnumerator DelayedNextPlayerTurn(float delay)
@@ -1969,7 +1972,7 @@ public class GamePlayManager : NetworkBehaviour
 
         if (IsHost)
         {
-            // Only advance here if not a bot
+            // Only advance here if it's NOT a bot!
             var playerList = MultiplayerManager.Instance.playerDataNetworkList;
             int globalIndex = playerIndex;
             bool isBot = (globalIndex >= 0 && globalIndex < playerList.Count && playerList[globalIndex].clientId >= 9000);
@@ -2099,6 +2102,8 @@ public class GamePlayManager : NetworkBehaviour
                 new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } } }
             );
         }
+
+
 
         ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
@@ -2243,9 +2248,11 @@ public class GamePlayManager : NetworkBehaviour
             StopCoroutine(turnTimerCoroutine);
             turnTimerCoroutine = null;
         }
+        // If you have other long-running coroutines, stop them here!
         SceneManager.sceneLoaded -= OnSceneLoaded;
         instance = null;
     }
+
 
 }
 

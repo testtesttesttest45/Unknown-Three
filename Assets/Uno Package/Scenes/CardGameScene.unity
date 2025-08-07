@@ -5751,14 +5751,12 @@ MonoBehaviour:
   throw_card_clip: {fileID: 8300000, guid: 120a34598cc88df41ae5586f5bba1cbe, type: 3}
   uno_btn_clip: {fileID: 8300000, guid: b35dc309cd2fd3a4b84ba5d33f261b07, type: 3}
   choose_color_clip: {fileID: 8300000, guid: b35dc309cd2fd3a4b84ba5d33f261b07, type: 3}
-  LeftRoomProbability: 10
-  UnoProbability: 70
-  LowercaseNameProbability: 30
   cardDealTime: 0.05
   _cardPrefab: {fileID: 114756711530414106, guid: 5526fc43457aa2b46a872cf29a52a629,
     type: 3}
   cardDeckTransform: {fileID: 1519604161}
   cardWastePile: {fileID: 508633655}
+  playerCardsPanel: {fileID: 554235827}
   arrowObject: {fileID: 65167659}
   arrowObject2: {fileID: 1024460536}
   unoBtn: {fileID: 1130704793}
@@ -5794,7 +5792,7 @@ MonoBehaviour:
   screenCanvas: {fileID: 1220166718}
   cards: []
   wasteCards: []
-  turnTimerDuration: 100
+  turnTimerDuration: 10
   deckInteractionLocked: 0
   isKingRefillPhase: 0
   peekedCard: {fileID: 0}
@@ -6273,7 +6271,6 @@ GameObject:
   m_Component:
   - component: {fileID: 235986504}
   - component: {fileID: 235986503}
-  - component: {fileID: 235986502}
   - component: {fileID: 235986501}
   m_Layer: 0
   m_Name: Camera
@@ -6326,14 +6323,6 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
---- !u!81 &235986502
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 235986500}
-  m_Enabled: 1
 --- !u!20 &235986503
 Camera:
   m_ObjectHideFlags: 0
@@ -6961,7 +6950,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 185.10004, y: -98.600006}
+  m_AnchoredPosition: {x: 185.09998, y: -98.599976}
   m_SizeDelta: {x: 175.5, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &316857637
