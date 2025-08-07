@@ -216,7 +216,6 @@ public class WinnerUI : MonoBehaviour
                 cardScript.IsOpen = true;
                 cardScript.UpdateCard();
 
-                // ---- Force gold aura for Zero cards in winner display ----
                 if (card.Value == CardValue.Zero && cardScript.specialOutline != null)
                     cardScript.specialOutline.SetActive(true);
             }

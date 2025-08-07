@@ -17,18 +17,12 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip uno_btn_clip;
     public AudioClip choose_color_clip;
 
-    [Header("Gameplay")]
-    [Range(0, 100)]
-    public int LeftRoomProbability = 10;
-    [Range(0, 100)]
-    public int UnoProbability = 70;
-    [Range(0, 100)]
-    public int LowercaseNameProbability = 30;
 
     public float cardDealTime = 3f;
     public Card _cardPrefab;
     public Transform cardDeckTransform;
     public Image cardWastePile;
+    public GameObject playerCardsPanel;
     public GameObject arrowObject, arrowObject2, unoBtn, cardDeckBtn;
     public Popup colorChoose, playerChoose, noNetwork;
     public GameObject loadingView, rayCastBlocker;
@@ -60,7 +54,7 @@ public class GamePlayManager : NetworkBehaviour
     public List<SerializableCard> wasteCards;
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
-    public float turnTimerDuration = 6f;
+    public float turnTimerDuration = 30f;
     private float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
@@ -301,7 +295,7 @@ public class GamePlayManager : NetworkBehaviour
                 card = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, player.cardsPanel.transform);
                 card.Type = sc.Type;
                 card.Value = sc.Value;
-                card.IsOpen = (localSeat == 0);
+                card.IsOpen = true;
                 card.CalcPoint();
                 card.name = $"{sc.Type}_{sc.Value}";
                 card.localSeat = localSeat;
@@ -2106,8 +2100,6 @@ public class GamePlayManager : NetworkBehaviour
             );
         }
 
-
-
         ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
 
@@ -2128,6 +2120,8 @@ public class GamePlayManager : NetworkBehaviour
         {
             cardWastePile.gameObject.SetActive(false);
         }
+        if (playerCardsPanel != null)
+            playerCardsPanel.SetActive(false);
 
     }
 
