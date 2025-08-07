@@ -89,8 +89,8 @@ public class Card : MonoBehaviour, IPointerClickHandler
         string txt = "";
         string spritePath = "Cards/BlankCard";
 
-        // Special case: the only "0" card (gold card)
-        if (Value == CardValue.Zero)
+        // GOLDEN ZERO (already done)
+        if (Type == CardType.Other && Value == CardValue.Zero)
         {
             if (IsOpen)
             {
@@ -102,7 +102,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
                 label1.text = txt;
                 label2.text = txt;
                 label3.text = txt;
-
                 if (specialOutline != null)
                     specialOutline.SetActive(true);
             }
@@ -113,14 +112,40 @@ public class Card : MonoBehaviour, IPointerClickHandler
                 if (specialOutline != null)
                     specialOutline.SetActive(false);
             }
-
-            // Always hide other outlines for zero
             if (glowOutline != null) glowOutline.SetActive(false);
             if (killedOutline != null) killedOutline.SetActive(false);
             if (markedOutline != null) markedOutline.SetActive(false);
             if (eyeOutline != null) eyeOutline.SetActive(false);
         }
-        else // --- all other cards ---
+        // GOLDEN JACK (NEW)
+        else if (Type == CardType.Other && Value == CardValue.GoldenJack)
+        {
+            if (IsOpen)
+            {
+                spritePath = "Cards/gold card";
+                txt = "J";
+                label1.color = Color.white;
+                label2.color = Color.white;
+                label3.color = Color.white;
+                label1.text = txt;
+                label2.text = txt;
+                label3.text = txt;
+                if (specialOutline != null)
+                    specialOutline.SetActive(true);
+            }
+            else
+            {
+                spritePath = "Cards/CardBack";
+                label1.text = label2.text = label3.text = "";
+                if (specialOutline != null)
+                    specialOutline.SetActive(false);
+            }
+            if (glowOutline != null) glowOutline.SetActive(false);
+            if (killedOutline != null) killedOutline.SetActive(false);
+            if (markedOutline != null) markedOutline.SetActive(false);
+            if (eyeOutline != null) eyeOutline.SetActive(false);
+        }
+        else
         {
             if (IsOpen)
             {

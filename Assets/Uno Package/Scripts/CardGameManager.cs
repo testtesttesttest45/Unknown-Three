@@ -132,6 +132,8 @@ public static class ExtantionMethods
                 return new Color(0f / 255f, 200f / 255f, 0f / 255f, 1f);
             case CardType.Blue:
                 return new Color(0f / 255f, 120f / 255f, 253f / 255f, 1f);
+            case CardType.Purple:
+                return new Color(155f / 255f, 48f / 255f, 255f / 255f, 1f);
             default:
                 return new Color(1f, 1f, 1f, 1f);
         }
@@ -150,6 +152,8 @@ public static class ExtantionMethods
                 return new Color(0, 100f / 255f, 0f, 1f);
             case CardType.Blue:
                 return new Color(0f, 60f / 255f, 126f / 255f, 1f);
+            case CardType.Purple:
+                return new Color(77f / 255f, 24f / 255f, 128f / 255f, 1f);
             default:
                 return new Color(1f, 1f, 1f, 1f);
         }
@@ -180,10 +184,11 @@ public enum CardType
     Yellow, // 1 → Number_2
     Green,  // 2 → Number_3
     Blue,   // 3 → Number_4
+    Purple, // 4 → Number_5
     Other
 }
 
 public enum CardValue
 {
-    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend
+    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend, GoldenJack
 }

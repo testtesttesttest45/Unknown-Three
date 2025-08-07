@@ -355,31 +355,50 @@ public class GamePlayManager : NetworkBehaviour
         }
 
     }
+
     public void CreateDeck()
     {
         cards = new List<SerializableCard>();
         wasteCards = new List<SerializableCard>();
 
-        List<CardValue> values = new List<CardValue>
-{
+        List<CardValue> allValues = new List<CardValue>
+    {
+        
+        CardValue.Five, CardValue.Six,  CardValue.Jack, CardValue.Queen, CardValue.King
+    };
 
-     CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
-    CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
-    CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
-};
+        // purple only have King, Queen, Jack
+        List<CardValue> purpleValues = new List<CardValue>
+    {
+        CardValue.Jack, CardValue.Queen, CardValue.King
+    };
 
+        // Add Red, Yellow, Green, Blue
         for (int j = 0; j < 4; j++)
         {
-            foreach (var val in values)
+            foreach (var val in allValues)
             {
                 var card = new SerializableCard((CardType)j, val);
                 cards.Add(card);
             }
         }
+
+        // Add Purple (CardType.Purple == 4)
+        foreach (var val in purpleValues)
+        {
+            var card = new SerializableCard(CardType.Purple, val);
+            cards.Add(card);
+        }
+
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
     }
+
 
     private IEnumerator StartPeekingPhase()
     {
