@@ -367,7 +367,8 @@ public class GamePlayManager : NetworkBehaviour
         List<CardValue> allValues = new List<CardValue>
     {
 
-         CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
+
+        CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
     CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
     CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
     };
@@ -396,6 +397,15 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
@@ -1980,8 +1990,6 @@ public class GamePlayManager : NetworkBehaviour
 
         botJackRevealActive = false;
     }
-
-
 
     [ClientRpc]
     void StartFiendPopupLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
