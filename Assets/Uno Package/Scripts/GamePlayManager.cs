@@ -368,9 +368,8 @@ public class GamePlayManager : NetworkBehaviour
     {
 
 
-        CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
-    CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
-    CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
+        CardValue.Nine, CardValue.Eight, CardValue.Seven, CardValue.Six,
+    CardValue.Ten, CardValue.Jack,  CardValue.King
     };
 
         // purple only have King, Queen, Jack
@@ -792,7 +791,8 @@ public class GamePlayManager : NetworkBehaviour
         card.Type = type;
         card.Value = value;
         card.IsOpen = true;
-        StartCoroutine(HideCardAfterDelay(card, 1f));
+        card.FlashMarkedOutline();
+        StartCoroutine(HideCardAfterDelay(card, 2f));
     }
 
 
@@ -1760,7 +1760,8 @@ public class GamePlayManager : NetworkBehaviour
                 card.Type = info.type;
                 card.Value = info.value;
                 card.IsOpen = true;
-                StartCoroutine(HideCardAfterDelay(card, 1.0f));
+                card.FlashMarkedOutline();
+                StartCoroutine(HideCardAfterDelay(card, 2f));
             }
         }
     }
