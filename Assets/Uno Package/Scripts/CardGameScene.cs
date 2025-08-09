@@ -107,9 +107,9 @@ public class CardGameScene : MonoBehaviour
         if (GamePlayManager.instance != null)
             GamePlayManager.instance.Cleanup();
         GamePlayManager.instance = null;
-        CardGameScene.instance = null;
+        instance = null;
 
-        var multiplayerObj = GameObject.FindObjectOfType<MultiplayerManager>();
+        var multiplayerObj = FindObjectOfType<MultiplayerManager>();
         if (multiplayerObj != null)
         {
             multiplayerObj.Cleanup();

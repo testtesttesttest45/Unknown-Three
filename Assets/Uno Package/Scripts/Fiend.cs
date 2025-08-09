@@ -119,6 +119,7 @@ public class Fiend : NetworkBehaviour
 
         player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, true, () =>
         {
+            GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
             if (IsHost && NetworkManager.Singleton.IsServer)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
         }));
@@ -261,6 +262,7 @@ public class Fiend : NetworkBehaviour
             player.cardsPanel.UpdatePos();
             if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.IsServer)
             {
+                GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
             }
         }));

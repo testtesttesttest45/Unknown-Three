@@ -155,13 +155,21 @@ public class King : NetworkBehaviour
 
         if (killedWasFiend && isOpponent)
         {
+            float jumbleSeconds = 3.5f;
+            float fiendAvatarSeconds = jumbleSeconds;
+
+            GamePlayManager.instance.BeginTemporaryAvatarFromServer(
+                globalSeat,
+                CardValue.Fiend,
+                fiendAvatarSeconds 
+            );
+
             ShowFiendRevengeClientRpc(globalSeat);
             await System.Threading.Tasks.Task.Delay(400);
 
             int killerLocalSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(killerGlobalSeat);
             if (killerGlobalSeat >= 0 && killerGlobalSeat < MultiplayerManager.Instance.playerDataNetworkList.Count)
                 killerClientId = MultiplayerManager.Instance.playerDataNetworkList[killerGlobalSeat].clientId;
-
 
             if (killerLocalSeat >= 0 && killerLocalSeat < GamePlayManager.instance.players.Count)
             {
@@ -172,22 +180,34 @@ public class King : NetworkBehaviour
                 else
                 {
                     JumbleOwnHandClientRpc(killerGlobalSeat);
-
-
                 }
             }
         }
         else if (killedWasGoldenJack && isOpponent)
         {
+            float revealSeconds = 3.0f;
+            float gjAvatarSeconds = revealSeconds;
+
+            GamePlayManager.instance.BeginTemporaryAvatarFromServer(
+                globalSeat,
+                CardValue.GoldenJack,
+                gjAvatarSeconds
+            );
+
             ShowGoldenJackRevengeClientRpc(killerGlobalSeat, globalSeat, killerClientId);
-            await System.Threading.Tasks.Task.Delay(3000);
+
+            await System.Threading.Tasks.Task.Delay((int)(gjAvatarSeconds * 1000));
+
+            if (NetworkManager.Singleton.IsHost)
+                GamePlayManager.instance.EndAvatarForSeatFromServer(killerGlobalSeat);
 
             if (NetworkManager.Singleton.IsHost)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
-        }
 
+        }
         else
         {
+            GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
             if (NetworkManager.Singleton.IsHost)
                 GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
         }
@@ -216,14 +236,11 @@ public class King : NetworkBehaviour
         var kingPlayer = GamePlayManager.instance.players[kingUserLocalSeat];
         var victimPlayer = GamePlayManager.instance.players[victimLocalSeat];
 
-        // 1. Show the revenge message **on the victim immediately**
         if (victimPlayer != null)
         {
             victimPlayer.ShowMessage("Golden Jack's Revenge!", true, 2.5f);
         }
 
-        // 2. Show all of king user's hand cards to everyone except the killer.
-        //    The killer sees only flash effect (no value revealed).
         bool isKiller = (myClientId == killerClientId);
 
         for (int i = 0; i < kingPlayer.cardsPanel.cards.Count; i++)
@@ -254,8 +271,6 @@ public class King : NetworkBehaviour
             card.IsOpen = false;
     }
 
-
-
     private bool IsBotClientId(ulong clientId) => clientId >= 9000;
 
     [ClientRpc]
@@ -284,11 +299,16 @@ public class King : NetworkBehaviour
             int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
         }
 
-        player.StartCoroutine(Fiend.Instance.JumbleHandAnimation(player, hand, indices.ToArray(), 3.0f, true, () =>
-        {
-            if (GamePlayManager.instance.IsHost && NetworkManager.Singleton.IsServer)
-                NotifyJumbleFinishedServerRpc();
-        }));
+        player.StartCoroutine(Fiend.Instance.JumbleHandAnimation(
+            player, hand, indices.ToArray(), 3.0f, true, () =>
+            {
+                if (NetworkManager.Singleton.IsHost)
+                    GamePlayManager.instance.EndAvatarForSeatFromServer(killerGlobalSeat);
+
+                if (GamePlayManager.instance.IsHost && NetworkManager.Singleton.IsServer)
+                    NotifyJumbleFinishedServerRpc();
+            }));
+
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -407,7 +427,6 @@ public class King : NetworkBehaviour
         player.RemoveCard(killed, false);
     }
 
-
     public void StartBotKingPhase(ulong botClientId)
     {
         StartCoroutine(BotKingPhaseRoutine(botClientId));
@@ -487,12 +506,17 @@ public class King : NetworkBehaviour
             int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
         }
 
-        player.StartCoroutine(Fiend.Instance.JumbleHandAnimation(player, hand, indices.ToArray(), 3.0f, true, () =>
-        {
-            if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.IsServer)
-                GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
-        }));
-    }
+        int killerGlobalSeat = GamePlayManager.instance.GetGlobalIndexFromLocal(botLocalSeat);
 
+        player.StartCoroutine(Fiend.Instance.JumbleHandAnimation(
+            player, hand, indices.ToArray(), 3.0f, true, () =>
+            {
+                if (NetworkManager.Singleton.IsHost)
+                    GamePlayManager.instance.EndAvatarForSeatFromServer(killerGlobalSeat);
+
+                if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.IsServer)
+                    GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+            }));
+    }
 
 }

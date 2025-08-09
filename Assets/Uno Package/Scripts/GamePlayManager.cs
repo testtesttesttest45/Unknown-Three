@@ -30,9 +30,9 @@ public class GamePlayManager : NetworkBehaviour
     public GameObject menuButton;
     public int previousPlayerIndex = -1;
     public Coroutine turnTimeoutCoroutine;
-    private bool isJackRevealPhase = false;
-    private bool isGoldenJackRevealPhase = false;
+    
     private bool isPeekingPhase = false;
+    public float peekTime = 6f;
     public bool wasteInteractionStarted = false;
 
     [Header("Player Setting")]
@@ -54,7 +54,7 @@ public class GamePlayManager : NetworkBehaviour
     public List<SerializableCard> wasteCards;
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
-    public float turnTimerDuration = 6f;
+    public float turnTimerDuration = 10f;
     private float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
@@ -83,6 +83,10 @@ public class GamePlayManager : NetworkBehaviour
     private bool turnEndedByTimeout = false;
     private bool lastTurnEndedByTimeout = false;
 
+    [Header("Lucky Wheel")]
+    public WheelSpinUI wheelUI;
+    public float wheelSpinDuration = 3f;
+    private int pendingStartGlobalIndex = 0;
 
     [Header("Bot AI Tuning")]
     [Tooltip("Bot will only consider waste pile if card value is <= this value.")]
@@ -95,6 +99,22 @@ public class GamePlayManager : NetworkBehaviour
     [Tooltip("Chance (percent) for bot to do a replace after deck draw (0-100).")]
     [Range(0, 100)]
     public int botDeckReplaceChance = 20;
+
+    [Header("Special Avatar Sprites")]
+    public Sprite avatarJack;
+    public Sprite avatarQueen;
+    public Sprite avatarKing;
+    public Sprite avatarFiend;
+    public Sprite avatarGoldenJack;
+    [Tooltip("How long the power avatar stays before reverting")]
+    public float specialAvatarDuration = 2f;
+    private List<Sprite> baseAvatarSprites;
+
+    private Dictionary<int, Coroutine> avatarRevertBySeat = new Dictionary<int, Coroutine>();
+
+    public int currentPowerOwnerGlobalSeat = -1;
+    private CardValue currentPowerValue = 0;
+    private Coroutine safetyEndCoroutine;
 
     public CardType CurrentType
     {
@@ -111,10 +131,6 @@ public class GamePlayManager : NetworkBehaviour
     [SerializeField] CardType _currentType;
     [SerializeField] CardValue _currentValue;
 
-    public bool IsDeckArrow
-    {
-        get { return arrowObject.activeSelf; }
-    }
     public static GamePlayManager instance;
 
     System.DateTime pauseTime;
@@ -139,13 +155,22 @@ public class GamePlayManager : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        Debug.Log("[GamePlayManager] OnNetworkSpawn! Safe to set up player panels.");
         SetupAllPlayerPanels();
 
-        // Clients always notify host they are ready
-        if (!IsHost)
+        if (IsHost)
+        {
+            // Count host as ready
+            readyClientIds.Add(NetworkManager.Singleton.LocalClientId);
+            // In case there are no other clients, start right away
+            if (readyClientIds.Count == MultiplayerManager.Instance.playerDataNetworkList.Count)
+                StartMultiplayerGame();
+        }
+        else
+        {
             NotifyReadyServerRpc();
+        }
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     public void NotifyReadyServerRpc(ServerRpcParams rpcParams = default)
@@ -205,7 +230,6 @@ public class GamePlayManager : NetworkBehaviour
 
     public void StartMultiplayerGame()
     {
-        Debug.Log($"[StartMultiplayerGame] Deck has {cards.Count} cards before dealing.");
         menuButton.SetActive(true);
         if (cardDeckTransform != null)
             cardDeckTransform.gameObject.SetActive(true);
@@ -248,13 +272,12 @@ public class GamePlayManager : NetworkBehaviour
             if (IsCardDefault(allCards[i]))
                 Debug.LogError($"[ASSERT] allCards[{i}] is default! This will cause missing cards.");
         }
-        
+
 
         DealCardsClientRpc(clientIds, allCards, cardsPerPlayer, playerCount);
 
         UpdateDeckVisualClientRpc(cards.ToArray());
     }
-
 
     [ClientRpc]
     void DealCardsClientRpc(ulong[] clientIds, SerializableCard[] allCardsFlat, int cardsPerPlayer, int playerCount)
@@ -281,6 +304,148 @@ public class GamePlayManager : NetworkBehaviour
             players[seat].cardsPanel.UpdatePos();
 
         StartCoroutine(StartPeekingPhase());
+    }
+
+    public List<ulong> GetAllHumanClientIds()
+    {
+        var ids = new List<ulong>();
+        foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
+            if (pd.clientId < 9000) ids.Add(pd.clientId);
+        return ids;
+    }
+
+    void BeginLuckyWheelPhase()
+    {
+        if (wheelUI == null)
+        {
+            if (IsHost)
+            {
+                pendingStartGlobalIndex = Random.Range(0, MultiplayerManager.Instance.playerDataNetworkList.Count);
+                StartPlayerTurnForAllClientRpc(pendingStartGlobalIndex);
+            }
+            return;
+        }
+
+        BuildWheelVisualsLocal();
+        wheelUI.Show();
+
+        if (IsHost)
+            HostPickWinnerAndSpin();
+    }
+
+    void HostPickWinnerAndSpin()
+    {
+        var plist = MultiplayerManager.Instance.playerDataNetworkList;
+        int pCount = plist.Count; if (pCount == 0) return;
+
+        int winnerGlobalSeat = Random.Range(0, pCount);
+
+        List<int> candidatePockets = new List<int>();
+        for (int i = 0; i < 8; i++) if (i % pCount == winnerGlobalSeat) candidatePockets.Add(i);
+        int pocketIndex = candidatePockets[Random.Range(0, candidatePockets.Count)];
+
+        float slice = 360f / 8f;
+        float pocketCenterZ = pocketIndex * slice;
+        int extraSpins = Random.Range(3, 5);
+        float targetZ = extraSpins * 360f + pocketCenterZ;
+
+        pendingStartGlobalIndex = winnerGlobalSeat;
+
+        SpinWheelClientRpc(targetZ, wheelSpinDuration, winnerGlobalSeat);
+
+        StartCoroutine(HostAfterWheelRoutine(wheelSpinDuration, winnerGlobalSeat));
+    }
+
+    private IEnumerator HostAfterWheelRoutine(float delay, int winnerGlobalSeat)
+    {
+        yield return new WaitForSeconds(delay);
+        AnnounceWheelWinnerClientRpc(winnerGlobalSeat);
+        yield return new WaitForSeconds(2f);
+        HideWheelClientRpc();
+
+        StartPlayerTurnForAllClientRpc(winnerGlobalSeat);
+
+        var list = MultiplayerManager.Instance.playerDataNetworkList;
+        if (winnerGlobalSeat >= 0 && winnerGlobalSeat < list.Count && list[winnerGlobalSeat].clientId >= 9000)
+            StartCoroutine(RunBotTurn(winnerGlobalSeat));
+    }
+
+    [ClientRpc]
+    void SpinWheelClientRpc(float targetZ, float duration, int winnerGlobalSeat)
+    {
+        if (wheelUI == null) return;
+        StartCoroutine(SpinWheelSafe(targetZ, duration));
+    }
+
+    IEnumerator SpinWheelSafe(float targetZ, float duration)
+    {
+        if (wheelUI == null) yield break;
+
+        if (!wheelUI.gameObject.activeInHierarchy)
+            wheelUI.Show();
+
+        float wait = 0f;
+        while (wheelUI != null && !wheelUI.gameObject.activeInHierarchy && wait < 1f)
+        {
+            wait += Time.unscaledDeltaTime;
+            yield return null; // next frame
+        }
+
+        if (wheelUI == null || !wheelUI.gameObject.activeInHierarchy)
+            yield break;
+
+        wheelUI.OnPocketTick = () => { CardGameManager.PlaySound(throw_card_clip); };
+
+        yield return StartCoroutine(wheelUI.SpinTo(targetZ, duration));
+    }
+
+    [ClientRpc]
+    void AnnounceWheelWinnerClientRpc(int winnerGlobalSeat)
+    {
+        if (wheelUI == null) return;
+
+        var list = MultiplayerManager.Instance.playerDataNetworkList;
+
+        bool winnerIsBot =
+            winnerGlobalSeat >= 0 &&
+            winnerGlobalSeat < list.Count &&
+            list[winnerGlobalSeat].clientId >= 9000;
+
+        ulong myId = NetworkManager.Singleton.LocalClientId;
+        int myGlobalSeat = -1;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].clientId == myId) { myGlobalSeat = i; break; }
+
+        bool iAmWinner = (myGlobalSeat == winnerGlobalSeat);
+
+        if (!winnerIsBot && iAmWinner)
+        {
+            wheelUI.PlayLocalWinFX();
+        }
+    }
+
+    [ClientRpc]
+    void HideWheelClientRpc()
+    {
+        if (wheelUI != null) wheelUI.Hide();
+    }
+
+    void BuildWheelVisualsLocal()
+    {
+        var plist = MultiplayerManager.Instance.playerDataNetworkList;
+        int pCount = plist.Count;
+
+        for (int pocket = 0; pocket < 8; pocket++)
+        {
+            int globalSeat = pocket % pCount;
+            int localSeat = GetLocalIndexFromGlobal(globalSeat);
+
+            var p2 = (localSeat >= 0 && localSeat < players.Count) ? players[localSeat] : null;
+            var sprite = (p2 != null && p2.avatarImage != null) ? p2.avatarImage.sprite : null;
+            string label = (p2 != null) ? p2.playerName : $"Player {globalSeat + 1}";
+
+            wheelUI.SetPocket(pocket, sprite, label);
+        }
     }
 
     void AssignHandToSeat(int localSeat, List<SerializableCard> hand)
@@ -357,6 +522,92 @@ public class GamePlayManager : NetworkBehaviour
             p2.isUserPlayer = (pd.clientId == NetworkManager.Singleton.LocalClientId);
         }
 
+        if (baseAvatarSprites == null || baseAvatarSprites.Count != players.Count)
+            baseAvatarSprites = new List<Sprite>(new Sprite[players.Count]);
+
+        for (int seat = 0; seat < players.Count; seat++)
+        {
+            var p2 = players[seat];
+            if (p2 != null && p2.avatarImage != null)
+                baseAvatarSprites[seat] = p2.avatarImage.sprite; // store normal avatar for revert
+        }
+    }
+
+    [ClientRpc]
+    void BeginPowerAvatarClientRpc(int globalPlayerIndex, int powerValue, ClientRpcParams rpcParams = default)
+    {
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+        if (localIndex < 0 || localIndex >= players.Count) return;
+        var p = players[localIndex]; if (p?.avatarImage == null) return;
+
+        Sprite s = null;
+        switch ((CardValue)powerValue)
+        {
+            case CardValue.Jack: s = avatarJack; break;
+            case CardValue.Queen: s = avatarQueen; break;
+            case CardValue.King: s = avatarKing; break;
+            case CardValue.Fiend: s = avatarFiend; break;
+            case CardValue.GoldenJack: s = avatarGoldenJack; break;
+        }
+        if (s == null) return;
+
+        // apply
+        p.avatarImage.sprite = s;
+
+        // stop any pending revert coroutine for this seat
+        if (avatarRevertBySeat.TryGetValue(localIndex, out var running) && running != null)
+            StopCoroutine(running);
+        avatarRevertBySeat[localIndex] = null;
+    }
+
+    [ClientRpc]
+    public void EndPowerAvatarClientRpc(int globalPlayerIndex, ClientRpcParams rpcParams = default)
+    {
+        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
+        if (localIndex < 0 || localIndex >= players.Count) return;
+        var p = players[localIndex]; if (p?.avatarImage == null) return;
+
+        if (baseAvatarSprites != null && localIndex < baseAvatarSprites.Count && baseAvatarSprites[localIndex] != null)
+            p.avatarImage.sprite = baseAvatarSprites[localIndex];
+
+        if (avatarRevertBySeat.TryGetValue(localIndex, out var running) && running != null)
+            StopCoroutine(running);
+        avatarRevertBySeat[localIndex] = null;
+    }
+
+    IEnumerator SafetyEndPowerAvatarAfter(int globalSeat, float seconds)
+    {
+        if (safetyEndCoroutine != null) StopCoroutine(safetyEndCoroutine);
+        safetyEndCoroutine = StartCoroutine(_());
+        IEnumerator _()
+        {
+            yield return new WaitForSeconds(seconds);
+            var targets = GetAllHumanClientIds();
+            if (targets.Count > 0)
+                EndPowerAvatarClientRpc(globalSeat, new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = targets }
+                });
+            safetyEndCoroutine = null;
+        }
+        yield break;
+    }
+
+    public void EndAvatarForSeatFromServer(int globalSeat)
+    {
+        if (!IsHost) return;
+        var targets = new List<ulong>();
+        foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
+            if (pd.clientId < 9000) targets.Add(pd.clientId);
+
+        if (targets.Count > 0)
+            EndPowerAvatarClientRpc(
+                globalSeat,
+                new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = targets } }
+            );
+
+        if (currentPowerOwnerGlobalSeat == globalSeat)
+            currentPowerOwnerGlobalSeat = -1;
     }
 
     public void CreateDeck()
@@ -365,12 +616,11 @@ public class GamePlayManager : NetworkBehaviour
         wasteCards = new List<SerializableCard>();
 
         List<CardValue> allValues = new List<CardValue>
-    {
-
-
-        CardValue.Nine, CardValue.Eight, CardValue.Seven, CardValue.Six,
-    CardValue.Ten, CardValue.Jack,  CardValue.King
-    };
+        {
+            CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
+            CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
+            CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
+        };
 
         // purple only have King, Queen, Jack
         List<CardValue> purpleValues = new List<CardValue>
@@ -378,7 +628,7 @@ public class GamePlayManager : NetworkBehaviour
         CardValue.Jack, CardValue.Queen, CardValue.King
     };
 
-        // Add Red, Yellow, Green, Blue
+        // Red, Yellow, Green, Blue
         for (int j = 0; j < 4; j++)
         {
             foreach (var val in allValues)
@@ -388,7 +638,6 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
-        // Add Purple (CardType.Purple == 4)
         foreach (var val in purpleValues)
         {
             var card = new SerializableCard(CardType.Purple, val);
@@ -398,24 +647,31 @@ public class GamePlayManager : NetworkBehaviour
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
     }
 
+    public void BeginTemporaryAvatarFromServer(int globalPlayerIndex, CardValue power, float? durationOverride = null)
+    {
+        if (!IsHost) return;
+
+        var targets = GetAllHumanClientIds();
+        if (targets.Count == 0) return;
+
+        BeginPowerAvatarClientRpc(
+            globalPlayerIndex,
+            (int)power,
+            new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = targets } }
+        );
+
+        float dur = durationOverride ?? specialAvatarDuration;
+        StartCoroutine(SafetyEndPowerAvatarAfter(globalPlayerIndex, dur));
+    }
 
     private IEnumerator StartPeekingPhase()
     {
         isPeekingPhase = true;
 
-        float peekTime = 4f;
         int localPlayerIndex = 0;
         var myCards = players[localPlayerIndex].cardsPanel.cards;
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
@@ -462,7 +718,6 @@ public class GamePlayManager : NetworkBehaviour
             }
         }
 
-
         for (int pi = 1; pi < players.Count; pi++)
         {
             foreach (var card in players[pi].cardsPanel.cards)
@@ -488,13 +743,7 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         isPeekingPhase = false;
-
-
-        if (IsHost)
-        {
-            currentPlayerIndex = 0;
-            StartPlayerTurnForAllClientRpc(currentPlayerIndex);
-        }
+        BeginLuckyWheelPhase();
     }
 
     public void DisableDeckClickability()
@@ -536,6 +785,7 @@ public class GamePlayManager : NetworkBehaviour
                 return localIndex;
         return 0;
     }
+
     public void NextPlayerIndex()
     {
         int step = clockwiseTurn ? 1 : -1;
@@ -571,7 +821,7 @@ public class GamePlayManager : NetworkBehaviour
             return;
         }
         isTurnEnding = false;
-        isJackRevealPhase = false;
+        Jack.Instance.isJackRevealPhase = false;
         ulong curClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
         peekedCardsByClientId.Remove(curClientId);
         hasPeekedCard = false;
@@ -636,7 +886,6 @@ public class GamePlayManager : NetworkBehaviour
         return top != null ? top.GetComponent<Card>() : null;
     }
 
-
     private IEnumerator ShowGameOverAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
@@ -646,6 +895,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     public void PlayDrawCardSoundClientRpc()
     {
+        if (!CardGameManager.IsSound) return;
         if (_audioSource != null && draw_card_clip != null)
             _audioSource.PlayOneShot(draw_card_clip);
     }
@@ -676,7 +926,6 @@ public class GamePlayManager : NetworkBehaviour
         hasPeekedCard = false;
         peekedCard = null;
         wasteInteractionStarted = false;
-
     }
 
     [ClientRpc]
@@ -702,8 +951,6 @@ public class GamePlayManager : NetworkBehaviour
         CurrentPlayer.OnTurnEnd();
         EndTurnForAllClientRpc();
 
-
-
         if (IsHost)
         {
             NextPlayerTurn();
@@ -723,253 +970,18 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-    void OnJackCardDiscardedByMe()
+    public void EndCurrentPowerAvatarFromServer()
     {
-        if (!IsMyTurn() || !players[0].isUserPlayer)
-        {
-            Debug.LogWarning("OnJackCardDiscardedByMe called but not my turn or not user player!");
-            return;
-        }
-        isJackRevealPhase = true;
-        for (int seat = 0; seat < players.Count; seat++)
-        {
-            var p = players[seat];
-            for (int i = 0; i < p.cardsPanel.cards.Count; i++)
-            {
-                var handCard = p.cardsPanel.cards[i];
-                handCard.ShowGlow(true);
-                handCard.IsClickable = true;
-                int s = seat, idx = i;
-                handCard.onClick = null;
-                handCard.onClick = (clickedCard) =>
-                {
-                    if (!isJackRevealPhase) return;
-                    isJackRevealPhase = false;
-                    DisableAllHandCardGlowAllPlayers();
-                    int globalPlayerIndex = GetGlobalIndexFromLocal(s);
-                    RequestRevealHandCardServerRpc(globalPlayerIndex, idx);
-                    UpdateDeckClickability();
-                };
+        if (!IsHost) return;
+        if (currentPowerOwnerGlobalSeat < 0) return;
 
-            }
-        }
-        if (players[0].isUserPlayer)
-        {
-            players[0].SetTimerVisible(true);
-            players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-        }
-    }
-
-    IEnumerator HideCardAfterDelay(Card card, float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        card.IsOpen = false;
-    }
-
-    [ClientRpc]
-    void RevealHandCardClientRpc(
-     int playerIndex, int cardIndex, CardType type, CardValue value, ulong jackUserClientId,
-     ClientRpcParams rpcParams = default)
-    {
-        if (IsBotClientId(jackUserClientId))
-        {
-            Debug.LogError("BUG: Bot Jack reveal triggered RevealHandCardClientRpc!");
-            return;
-        }
-        Debug.Log($"RevealHandCardClientRpc: local={NetworkManager.Singleton.LocalClientId} jack={jackUserClientId} botJack={IsBotClientId(jackUserClientId)}");
-
-        if (IsBotClientId(NetworkManager.Singleton.LocalClientId))
-            return;
-
-        if (NetworkManager.Singleton.LocalClientId != jackUserClientId)
-            return;
-        if (IsBotClientId(jackUserClientId))
-            return;
-
-        var p = players[GetLocalIndexFromGlobal(playerIndex)];
-        var card = p.cardsPanel.cards[cardIndex];
-        card.Type = type;
-        card.Value = value;
-        card.IsOpen = true;
-        card.FlashMarkedOutline();
-        StartCoroutine(HideCardAfterDelay(card, 2f));
-    }
-
-
-
-    private ulong currentJackUserClientId = ulong.MaxValue;
-    private bool currentJackUserIsBot = false;
-
-    [ClientRpc]
-    void PlayJackZeroBonusSoundClientRpc(ClientRpcParams rpcParams = default)
-    {
-        if (_audioSource != null && jackSpecialVoiceClip != null)
-            _audioSource.PlayOneShot(jackSpecialVoiceClip);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    void RequestRevealHandCardServerRpc(int playerIndex, int cardIndex, ServerRpcParams serverRpcParams = default)
-    {
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
-        FreezeTimerUI();
-
-        var handCard = players[playerIndex].cardsPanel.cards[cardIndex];
-        ulong jackUserClientId = serverRpcParams.Receive.SenderClientId;
-        if (IsBotClientId(jackUserClientId))
-        {
-            Debug.LogWarning("RequestRevealHandCardServerRpc called for bot—this should never happen! Please check SimulateBotJackReveal.");
-            FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, true);
-            OnJackRevealDoneServerRpc();
-            return;
-        }
-
-        // Reveal for Jack user only
-        RevealHandCardClientRpc(
-            playerIndex, cardIndex, handCard.Type, handCard.Value, jackUserClientId,
-            new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams
-                {
-                    TargetClientIds = new ulong[] { jackUserClientId }
-                }
-            }
-        );
-        // Reveal for others: flash
-        FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, false);
-
-        // Now delay before exposing the Zero
-        StartCoroutine(ExposeZeroAfterDelayCoroutine(jackUserClientId));
-    }
-
-
-    private IEnumerator ExposeZeroAfterDelayCoroutine(ulong jackUserClientId)
-    {
-        // 1 second suspense delay!
-        yield return new WaitForSeconds(1.0f);
-
-        // --- JACK SPECIAL BONUS: Find the player (not Jack user) who has the Zero
-        int zeroHolderPlayerIndex = -1;
-        int zeroHolderCardIndex = -1;
-
-        for (int pi = 0; pi < players.Count; pi++)
-        {
-            ulong pClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(pi)].clientId;
-            if (pClientId == jackUserClientId) continue; // skip Jack user
-
-            for (int ci = 0; ci < players[pi].cardsPanel.cards.Count; ci++)
-            {
-                var card = players[pi].cardsPanel.cards[ci];
-                if (card == null) continue;
-                if (card.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    zeroHolderCardIndex = ci;
-                    break;
-                }
-            }
-            if (zeroHolderPlayerIndex != -1) break;
-        }
-
-        if (zeroHolderPlayerIndex != -1)
-        {
-            // Play sound for all real clients (not bots), including Jack user
-            var allRealClientIds = new List<ulong>();
-            foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
-            {
-                if (!IsBotClientId(pd.clientId)) // Only real clients
-                    allRealClientIds.Add(pd.clientId);
-            }
-
-            PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds }
-            });
-
-            ShowZeroHolderTimerEffectClientRpc(GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
-        }
-        else
-        {
-            OnJackRevealDoneServerRpc();
-        }
-    }
-
-
-    [ClientRpc]
-    void ShowZeroHolderTimerEffectClientRpc(int globalPlayerIndex)
-    {
-        // Defensive: bounds check
-        int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
-        if (localIndex < 0 || localIndex >= players.Count) return;
-        var player = players[localIndex];
-
-        // Turn ON the timer object and set its color to red
-        if (player.timerOjbect != null)
-        {
-            player.timerOjbect.SetActive(true);
-            var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
-            if (img != null)
-                img.color = Color.red;
-
-            StartCoroutine(RestoreTimerEffectAfterDelay(player, 3.0f));
-        }
-    }
-
-    private IEnumerator RestoreTimerEffectAfterDelay(Player2 player, float delay)
-    {
-        yield return new WaitForSeconds(delay);
-
-        if (player.timerOjbect != null)
-        {
-            // Restore to gold color #927620
-            var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
-            if (img != null)
-                img.color = new Color(0.572f, 0.463f, 0.125f, 1f);
-
-            player.timerOjbect.SetActive(false);
-        }
-    }
-
-
-
-    // Coroutine to wait before ending turn
-    private IEnumerator JackZeroBonusEndTurnCoroutine()
-    {
-        yield return new WaitForSeconds(3.0f); // Wait for bonus sound
-        OnJackRevealDoneServerRpc();
-    }
-
-
-    [ClientRpc]
-    void FlashMarkedOutlineClientRpc(int playerIndex, int cardIndex, ulong jackUserClientId, bool jackUserIsBot, ClientRpcParams rpcParams = default)
-    {
-        // If Jack user is a bot, everyone sees only the flash.
-        if (!jackUserIsBot && NetworkManager.Singleton.LocalClientId == jackUserClientId)
-            return; // Jack user skips flash—they see the value already
-
-        var p = players[GetLocalIndexFromGlobal(playerIndex)];
-        var card = p.cardsPanel.cards[cardIndex];
-
-        card.IsOpen = false;
-        card.FlashEyeOutline();
-    }
-
-
-    [ServerRpc(RequireOwnership = false)]
-    void OnJackRevealDoneServerRpc(ServerRpcParams rpcParams = default)
-    {
-        isJackRevealPhase = false;
-
-        if (IsHost)
-            StartCoroutine(DelayedNextPlayerTurn(1.0f));
-
-        currentJackUserClientId = ulong.MaxValue;
-        currentJackUserIsBot = false;
+        var targets = GetAllHumanClientIds();
+        if (targets.Count > 0)
+            EndPowerAvatarClientRpc(
+                currentPowerOwnerGlobalSeat,
+                new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = targets } }
+            );
+        currentPowerOwnerGlobalSeat = -1;
     }
 
     private void ResetAndRestartTurnTimerCoroutine()
@@ -983,7 +995,7 @@ public class GamePlayManager : NetworkBehaviour
         turnTimeoutCoroutine = StartCoroutine(HostTurnTimeoutRoutine());
     }
 
-    void DisableAllHandCardGlowAllPlayers()
+    public void DisableAllHandCardGlowAllPlayers()
     {
         foreach (var p in players)
             foreach (var card in p.cardsPanel.cards)
@@ -994,19 +1006,6 @@ public class GamePlayManager : NetworkBehaviour
                 card.onClick = null;
             }
     }
-
-    [ClientRpc]
-    void StartJackRevealLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
-    {
-        Debug.Log($"[JackReveal] I am {NetworkManager.Singleton.LocalClientId} (IsHost={IsHost}), Jack user is {clientId}");
-
-        if (NetworkManager.Singleton.LocalClientId != clientId)
-            return;
-
-        Debug.Log("Running OnJackCardDiscardedByMe!");
-        OnJackCardDiscardedByMe();
-    }
-
 
     [ClientRpc]
     public void EndTurnForAllClientRpc()
@@ -1075,9 +1074,9 @@ public class GamePlayManager : NetworkBehaviour
             yield break;
         }
 
-        // 2. Deck draw: decide what to do
+        // Deck draw: decide what to do
         float roll = Random.Range(0, 100);
-        bool doReplace = roll < botDeckReplaceChance; // e.g. 20%
+        bool doReplace = roll < botDeckReplaceChance;
 
         if (cards.Count == 0) yield break;
         SerializableCard topDeckCard = cards[cards.Count - 1];
@@ -1102,8 +1101,6 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-
-    // Host-only bot deck replace
     private void DoDeckReplaceForBot(int botLocalIndex, int handIndex)
     {
         int playerIndex = botLocalIndex;
@@ -1258,7 +1255,7 @@ public class GamePlayManager : NetworkBehaviour
 
     public void UpdateDeckClickability()
     {
-        if (isJackRevealPhase || isPeekingPhase)
+        if (Jack.Instance.isJackRevealPhase || isPeekingPhase)
         {
             DisableDeckClickability();
             return;
@@ -1390,6 +1387,7 @@ public class GamePlayManager : NetworkBehaviour
             };
         }
     }
+
     public void OnDiscardClicked()
     {
         if (!hasPeekedCard || peekedCard == null) return;
@@ -1504,9 +1502,23 @@ public class GamePlayManager : NetworkBehaviour
 
         wasteCards.Add(drawn);
 
-        if (drawn.Value == CardValue.Jack || drawn.Value == CardValue.Queen || drawn.Value == CardValue.King || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack)
+        if (drawn.Value == CardValue.Jack || drawn.Value == CardValue.Queen || drawn.Value == CardValue.King
+    || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack)
         {
             PlaySpecialCardVoiceClientRpc((int)drawn.Value);
+
+            currentPowerOwnerGlobalSeat = playerIndex;
+            currentPowerValue = drawn.Value;
+
+            var targets = GetAllHumanClientIds();
+            if (targets.Count > 0)
+                BeginPowerAvatarClientRpc(
+                    currentPowerOwnerGlobalSeat,
+                    (int)currentPowerValue,
+                    new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = targets } }
+                );
+
+            StartCoroutine(SafetyEndPowerAvatarAfter(currentPowerOwnerGlobalSeat, 10f));
         }
 
         DiscardPeekedCardWithVisualClientRpc(playerIndex, drawn, cards.ToArray(), wasteCards.ToArray());
@@ -1524,12 +1536,12 @@ public class GamePlayManager : NetworkBehaviour
             if (IsBotClientId(senderClientId))
             {
                 if (IsHost)
-                    StartCoroutine(SimulateBotJackReveal(senderClientId));
+                    StartCoroutine(Jack.Instance.SimulateBotJackReveal(senderClientId));
             }
             else
             {
                 // For humans, call the ClientRpc as before (target just the clientId)
-                StartJackRevealLocalOnlyClientRpc(
+                Jack.Instance.StartJackRevealLocalOnlyClientRpc(
                     senderClientId,
                     new ClientRpcParams
                     {
@@ -1574,6 +1586,7 @@ public class GamePlayManager : NetworkBehaviour
 
             if (cards.Count == 0)
             {
+                GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
                 // Powerless King: just a normal discard, no timer reset
                 StartCoroutine(DelayedNextPlayerTurn(1.0f));
                 return;
@@ -1631,11 +1644,11 @@ public class GamePlayManager : NetworkBehaviour
             if (IsBotClientId(senderClientId))
             {
                 if (IsHost)
-                    StartCoroutine(SimulateBotGoldenJackReveal(senderClientId));
+                    StartCoroutine(Jack.Instance.SimulateBotGoldenJackReveal(senderClientId));
             }
             else
             {
-                StartGoldenJackRevealLocalOnlyClientRpc(
+                Jack.Instance.StartGoldenJackRevealLocalOnlyClientRpc(
                     senderClientId,
                     new ClientRpcParams
                     {
@@ -1645,7 +1658,6 @@ public class GamePlayManager : NetworkBehaviour
             }
             return;
         }
-
 
         else if (discardValue == CardValue.Skip)
         {
@@ -1662,215 +1674,9 @@ public class GamePlayManager : NetworkBehaviour
         }
         else
             EndTurnForAllClientRpc();
-
     }
 
-    [ClientRpc]
-    void StartGoldenJackRevealLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
-    {
-        if (NetworkManager.Singleton.LocalClientId != clientId)
-            return;
-        OnGoldenJackCardDiscardedByMe();
-    }
-
-    void OnGoldenJackCardDiscardedByMe()
-    {
-        if (!IsMyTurn() || !players[0].isUserPlayer)
-        {
-            Debug.LogWarning("OnGoldenJackCardDiscardedByMe called but not my turn or not user player!");
-            return;
-        }
-        isGoldenJackRevealPhase = true;
-
-        for (int seat = 0; seat < players.Count; seat++)
-        {
-            var p = players[seat];
-            for (int i = 0; i < p.cardsPanel.cards.Count; i++)
-            {
-                var handCard = p.cardsPanel.cards[i];
-                handCard.ShowGlow(true);
-                handCard.IsClickable = true;
-                int s = seat, idx = i;
-                handCard.onClick = null;
-                handCard.onClick = (clickedCard) =>
-                {
-                    if (!isGoldenJackRevealPhase) return;
-                    isGoldenJackRevealPhase = false;
-                    DisableAllHandCardGlowAllPlayers();
-                    int globalPlayerIndex = GetGlobalIndexFromLocal(s);
-                    RequestRevealAllHandCardsServerRpc(globalPlayerIndex);
-                    UpdateDeckClickability();
-                };
-            }
-        }
-        if (players[0].isUserPlayer)
-        {
-            players[0].SetTimerVisible(true);
-            players[0].UpdateTurnTimerUI(turnTimerDuration, turnTimerDuration);
-        }
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    void RequestRevealAllHandCardsServerRpc(int playerIndex, ServerRpcParams serverRpcParams = default)
-    {
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
-        FreezeTimerUI();
-
-        ulong goldenJackUserClientId = serverRpcParams.Receive.SenderClientId;
-
-        // Reveal ALL cards of the selected player to the discarder
-        List<CardRevealInfo> revealInfos = new List<CardRevealInfo>();
-        var targetPlayer = players[playerIndex];
-        for (int i = 0; i < targetPlayer.cardsPanel.cards.Count; i++)
-        {
-            var handCard = targetPlayer.cardsPanel.cards[i];
-            if (handCard == null) continue;
-            revealInfos.Add(new CardRevealInfo { cardIndex = i, type = handCard.Type, value = handCard.Value });
-        }
-
-        RevealAllHandCardsClientRpc(playerIndex, revealInfos.ToArray(), goldenJackUserClientId,
-            new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new ulong[] { goldenJackUserClientId } } }
-        );
-
-        // For others: flash each card outline
-        for (int i = 0; i < targetPlayer.cardsPanel.cards.Count; i++)
-        {
-            FlashMarkedOutlineClientRpc(playerIndex, i, goldenJackUserClientId, false);
-        }
-
-        // Now do the expose bonus (copy your Jack logic, or refactor it out!)
-        StartCoroutine(ExposeZeroAfterDelayCoroutine(goldenJackUserClientId));
-    }
-
-    [ClientRpc]
-    void RevealAllHandCardsClientRpc(int playerIndex, CardRevealInfo[] infos, ulong goldenJackUserClientId, ClientRpcParams rpcParams = default)
-    {
-        if (NetworkManager.Singleton.LocalClientId != goldenJackUserClientId)
-            return;
-        var p = players[GetLocalIndexFromGlobal(playerIndex)];
-        foreach (var info in infos)
-        {
-            var card = p.cardsPanel.cards[info.cardIndex];
-            if (card != null)
-            {
-                card.Type = info.type;
-                card.Value = info.value;
-                card.IsOpen = true;
-                card.FlashMarkedOutline();
-                StartCoroutine(HideCardAfterDelay(card, 2f));
-            }
-        }
-    }
-
-    private bool botGoldenJackRevealActive = false;
-
-    private IEnumerator SimulateBotGoldenJackReveal(ulong botClientId)
-    {
-        if (botGoldenJackRevealActive)
-        {
-            Debug.LogWarning("SimulateBotGoldenJackReveal: Already active, ignoring duplicate call.");
-            yield break;
-        }
-        botGoldenJackRevealActive = true;
-
-        Debug.Log($"[SimulateBotGoldenJackReveal] botClientId={botClientId}");
-        yield return new WaitForSeconds(Random.Range(1f, 2f));
-
-        // Pick random target (any player except the bot itself) that has at least one card
-        List<int> validTargets = new List<int>();
-        for (int i = 0; i < players.Count; i++)
-        {
-            ulong pClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(i)].clientId;
-            if (players[i].isInRoom && players[i].cardsPanel.cards.Count > 0 && pClientId != botClientId)
-                validTargets.Add(i);
-        }
-        if (validTargets.Count == 0)
-        {
-            Debug.LogWarning("[SimulateBotGoldenJackReveal] No valid target players!");
-            botGoldenJackRevealActive = false;
-            yield break;
-        }
-        int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
-
-        // Reveal ALL cards of target to the bot (which is only cosmetic for bots, but we'll do it for completeness)
-        var targetPlayer = players[targetPlayerIndex];
-        for (int i = 0; i < targetPlayer.cardsPanel.cards.Count; i++)
-        {
-            // Flash for all real players
-            List<ulong> realClientIds = new List<ulong>();
-            foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
-            {
-                if (!IsBotClientId(pd.clientId))
-                    realClientIds.Add(pd.clientId);
-            }
-            FlashMarkedOutlineClientRpc(targetPlayerIndex, i, botClientId, false,
-                new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = realClientIds } });
-        }
-
-        // (Optionally: could call RevealAllHandCardsClientRpc for bot client, but not needed if bots have no UI.)
-
-        FreezeTimerUI();
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
-
-        yield return new WaitForSeconds(1.0f);
-
-        // --- GOLDEN JACK SPECIAL BONUS: Expose Zero logic (reuse your Jack code) ---
-        int zeroHolderPlayerIndex = -1;
-        for (int pi = 0; pi < players.Count; pi++)
-        {
-            ulong pClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(pi)].clientId;
-            if (pClientId == botClientId) continue; // skip bot user
-
-            for (int ci = 0; ci < players[pi].cardsPanel.cards.Count; ci++)
-            {
-                var card = players[pi].cardsPanel.cards[ci];
-                if (card == null) continue;
-                if (card.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    break;
-                }
-            }
-            if (zeroHolderPlayerIndex != -1) break;
-        }
-
-        // Play sound and effect for all real clients if Zero found
-        if (zeroHolderPlayerIndex != -1)
-        {
-            List<ulong> realClientIds = new List<ulong>();
-            foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
-            {
-                if (!IsBotClientId(pd.clientId))
-                    realClientIds.Add(pd.clientId);
-            }
-            PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams { TargetClientIds = realClientIds }
-            });
-
-            ShowZeroHolderTimerEffectClientRpc(GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
-        }
-        else
-        {
-            yield return new WaitForSeconds(1.0f); // Wait a moment for realism
-            OnJackRevealDoneServerRpc();
-        }
-
-        botGoldenJackRevealActive = false;
-    }
-
-
-
-    private bool IsBotClientId(ulong clientId)
+    public bool IsBotClientId(ulong clientId)
     {
         return clientId >= 9000;
     }
@@ -1878,6 +1684,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void PlaySpecialCardVoiceClientRpc(int cardValue)
     {
+        if (!CardGameManager.IsSound) return;
         if (_audioSource == null) return;
         AudioClip clip = null;
         switch ((CardValue)cardValue)
@@ -1893,103 +1700,6 @@ public class GamePlayManager : NetworkBehaviour
             _audioSource.volume = 0.4f;
             _audioSource.PlayOneShot(clip);
         }
-    }
-
-    private bool botJackRevealActive = false;
-
-    private IEnumerator SimulateBotJackReveal(ulong botClientId)
-    {
-        if (botJackRevealActive)
-        {
-            Debug.LogWarning("SimulateBotJackReveal: Already active, ignoring duplicate call.");
-            yield break;
-        }
-        botJackRevealActive = true;
-
-        Debug.Log($"[SimulateBotJackReveal] botClientId={botClientId}");
-        yield return new WaitForSeconds(Random.Range(1f, 2f));
-
-        // Pick random target (any player except the bot itself)
-        List<int> validTargets = new List<int>();
-        for (int i = 0; i < players.Count; i++)
-        {
-            ulong pClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(i)].clientId;
-            if (players[i].isInRoom && players[i].cardsPanel.cards.Count > 0 && pClientId != botClientId)
-                validTargets.Add(i);
-        }
-        if (validTargets.Count == 0)
-        {
-            Debug.LogWarning("[SimulateBotJackReveal] No valid target players!");
-            botJackRevealActive = false;
-            yield break;
-        }
-        int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
-        int targetCardIndex = Random.Range(0, players[targetPlayerIndex].cardsPanel.cards.Count);
-
-        Debug.Log($"[SimulateBotJackReveal] Bot reveals playerIndex={targetPlayerIndex} cardIndex={targetCardIndex}");
-
-        // 1. Flash eye outline to ALL real players except the bot (the one being Jack).
-        List<ulong> realClientIds = new List<ulong>();
-        foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
-        {
-            if (!IsBotClientId(pd.clientId))
-                realClientIds.Add(pd.clientId);
-        }
-        // Send FlashMarkedOutlineClientRpc to all real players
-        FlashMarkedOutlineClientRpc(targetPlayerIndex, targetCardIndex, botClientId, true,
-            new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams { TargetClientIds = realClientIds }
-            }
-        );
-
-        FreezeTimerUI();
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
-
-        yield return new WaitForSeconds(1.0f);
-
-        // 2. JACK SPECIAL BONUS: Find any player (except the bot himself) holding a Zero card.
-        int zeroHolderPlayerIndex = -1;
-        for (int pi = 0; pi < players.Count; pi++)
-        {
-            ulong pClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(pi)].clientId;
-            if (pClientId == botClientId) continue; // skip Jack user
-
-            for (int ci = 0; ci < players[pi].cardsPanel.cards.Count; ci++)
-            {
-                var card = players[pi].cardsPanel.cards[ci];
-                if (card == null) continue;
-                if (card.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    break;
-                }
-            }
-            if (zeroHolderPlayerIndex != -1) break;
-        }
-
-        // 3. If found, show timer effect and play sound for all real players (including the one who holds Zero)
-        if (zeroHolderPlayerIndex != -1)
-        {
-            PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams { TargetClientIds = realClientIds }
-            });
-
-            ShowZeroHolderTimerEffectClientRpc(GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
-        }
-        else
-        {
-            yield return new WaitForSeconds(1.0f); // Wait a moment for realism
-            OnJackRevealDoneServerRpc();
-        }
-
-        botJackRevealActive = false;
     }
 
     [ClientRpc]
@@ -2012,7 +1722,6 @@ public class GamePlayManager : NetworkBehaviour
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         King.Instance.StartKingPhase();
     }
-
 
     [ClientRpc]
     void DiscardPeekedCardWithVisualClientRpc(int playerIndex, SerializableCard discardedCard, SerializableCard[] deck, SerializableCard[] wastePile)
@@ -2080,7 +1789,6 @@ public class GamePlayManager : NetworkBehaviour
                 PlayDrawCardSoundClientRpc();
             }
         }
-
         if (IsHost && cards.Count == 0)
         {
             unoBtn.SetActive(false);
@@ -2088,7 +1796,6 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject2.SetActive(false);
         }
     }
-
 
     public void OnHandCardReplaceRequested(int handIndex)
     {
@@ -2191,7 +1898,6 @@ public class GamePlayManager : NetworkBehaviour
             p, handIndex, newCardVisual, newCardGO, fromPos, handSlotPos, animDuration, playerIndex, fromWastePile
         ));
 
-
         ShowReplacedMessageClientRpc(playerIndex);
         DisableUnoBtn();
         if (turnEndedByTimeout)
@@ -2243,11 +1949,8 @@ public class GamePlayManager : NetworkBehaviour
             {
                 StartCoroutine(DelayedNextPlayerTurn(0f));
             }
-
         }
-
     }
-
 
     void DisableAllHandCardGlow()
     {
@@ -2259,7 +1962,6 @@ public class GamePlayManager : NetworkBehaviour
             card.onClick = null;
         }
     }
-
 
     [ClientRpc]
     void ShowWastePileCardClientRpc(int cardType, int cardValue)
@@ -2282,8 +1984,6 @@ public class GamePlayManager : NetworkBehaviour
 
         var wp = discard.gameObject.AddComponent<WastePile>();
         wp.Initialize(discard);
-
-
 
         float randomRot = Random.Range(-50, 50f);
         StartCoroutine(AnimateCardMove(discard, cardDeckTransform.position, cardWastePile.transform.position, 0.3f, randomRot));
@@ -2364,17 +2064,12 @@ public class GamePlayManager : NetworkBehaviour
                 new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } } }
             );
         }
-
-
-
         ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
 
         if (winnerUI != null)
             winnerUI.ShowWinnersFromNetwork(results);
     }
-
-
 
     [ClientRpc]
     void ShowGameOverClientRpc()
@@ -2399,7 +2094,6 @@ public class GamePlayManager : NetworkBehaviour
             winnerUI.ShowWinnersFromNetwork(data);
     }
 
-
     private int Mod(int x, int m)
     {
         return (x % m + m) % m;
@@ -2414,7 +2108,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         DisableUnoBtn();
         if (CurrentPlayer.wasTimeout)
-        { 
+        {
             CurrentPlayer.wasTimeout = false;
             return;
         }
@@ -2422,7 +2116,6 @@ public class GamePlayManager : NetworkBehaviour
         CurrentPlayer.unoClicked = true;
         CardGameManager.PlaySound(uno_btn_clip);
     }
-
 
     public void FreezeTimerUI()
     {
@@ -2513,8 +2206,6 @@ public class GamePlayManager : NetworkBehaviour
         SceneManager.sceneLoaded -= OnSceneLoaded;
         instance = null;
     }
-
-
 }
 
 [System.Serializable]
@@ -2542,4 +2233,3 @@ public class AvatarProfiles
 {
     public List<AvatarProfile> profiles;
 }
-

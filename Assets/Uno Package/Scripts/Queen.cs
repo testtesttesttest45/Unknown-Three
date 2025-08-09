@@ -202,6 +202,8 @@ public class Queen : NetworkBehaviour
 
         yield return new WaitForSeconds(2f);
 
+        GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
+
         if (NetworkManager.Singleton.IsHost)
             GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
     }

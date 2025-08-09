@@ -30,16 +30,13 @@ public class Sound : MonoBehaviour
         return !IsEnabled();
     }
 
-    public bool IsEnabled()
-    {
-        return CUtils.GetBool("sound_enabled", true);
-    }
-
+    public bool IsEnabled() => CardGameManager.IsSound;
     public void SetEnabled(bool enabled)
     {
-        CUtils.SetBool("sound_enabled", enabled);
+        CardGameManager.IsSound = enabled;
         UpdateSetting();
     }
+
 
     public void Play(AudioClip clip)
     {

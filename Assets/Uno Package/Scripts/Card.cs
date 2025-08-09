@@ -229,14 +229,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
     }
 
-    //public bool IsAllowCard()
-    //{
-    //    return Type == GamePlayManager.instance.CurrentType ||
-    //        Value == GamePlayManager.instance.CurrentValue ||
-    //        Type == CardType.Other;
-    //}
-
-
     public void ShowGlow(bool show)
     {
         if (glowOutline != null)
@@ -262,7 +254,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
 
         markedOutline.SetActive(true);
 
-        // If your markedOutline is a UI Image, animate the alpha. Otherwise, just toggle on/off for a basic effect.
         Image outlineImg = markedOutline.GetComponent<Image>();
         float elapsed = 0f;
         while (elapsed < duration)
