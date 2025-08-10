@@ -179,7 +179,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: PLAY AGAIN
+  m_text: 'MAIN MENU
+
+'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5abda1bbee8d3784eb577774820fbea6, type: 2}
   m_sharedMaterial: {fileID: 6037635217542421319, guid: 5abda1bbee8d3784eb577774820fbea6,
@@ -389,12 +391,12 @@ GameObject:
   - component: {fileID: 266469589}
   - component: {fileID: 266469590}
   m_Layer: 5
-  m_Name: HostDisconnectUI
+  m_Name: DisconnectUI
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &266469589
 RectTransform:
   m_ObjectHideFlags: 0
@@ -429,7 +431,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c5382d04c05b80748adaf567158b3392, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playAgainButton: {fileID: 271570962}
+  mainMenuButton: {fileID: 271570962}
+  panel: {fileID: 0}
 --- !u!1 &271570958
 GameObject:
   m_ObjectHideFlags: 0
@@ -445,7 +448,7 @@ GameObject:
   - component: {fileID: 271570961}
   - component: {fileID: 271570960}
   m_Layer: 5
-  m_Name: PlayAgainButton
+  m_Name: MainMenuButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1810,7 +1813,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Host has disconnected!
+  m_text: LOST CONNECTION TO SERVER!
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5abda1bbee8d3784eb577774820fbea6, type: 2}
   m_sharedMaterial: {fileID: 6037635217542421319, guid: 5abda1bbee8d3784eb577774820fbea6,

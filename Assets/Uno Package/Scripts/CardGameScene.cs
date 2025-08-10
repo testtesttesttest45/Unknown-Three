@@ -28,7 +28,6 @@ public class CardGameScene : MonoBehaviour
         while (MultiplayerManager.Instance == null || MultiplayerManager.Instance.playerDataNetworkList == null)
             yield return null;
 
-        // If a client re-enters the game scene after Game Over, bounce them home.
         if (GamePlayManager.GameHasEnded)
         {
             UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScene");
@@ -65,11 +64,6 @@ public class CardGameScene : MonoBehaviour
     public void ShowMenu()
     {
         menuPopup.ShowPopup();
-
-        Timer.Schedule(this, 0.25f, () =>
-        {
-            // CUtils.ShowInterstitialAd();
-        });
         CardGameManager.PlayButton();
     }
 
@@ -81,10 +75,6 @@ public class CardGameScene : MonoBehaviour
     public void ShowExit()
     {
         exitPopup.ShowPopup();
-        Timer.Schedule(this, 0.25f, () =>
-        {
-            // CUtils.ShowInterstitialAd();
-        });
         CardGameManager.PlayButton();
     }
 
@@ -95,24 +85,41 @@ public class CardGameScene : MonoBehaviour
 
     public void CloseGame()
     {
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsListening &&
+            NetworkManager.Singleton.IsHost &&
+            !GamePlayManager.GameHasEnded)
         {
-            if (NetworkManager.Singleton.IsHost)
-            {
-                NetworkManager.Singleton.Shutdown();
-                LobbyManager.Instance?.DeleteLobby();
-            }
-            else
-            {
-                NetworkManager.Singleton.Shutdown();
-            }
+            GamePlayManager.instance?.ShowDisconnectUIClientRpc();
+            StartCoroutine(HostShutdownAfterNotify());
+            return;
         }
 
+        DoLocalShutdownAndReturnHome();
+    }
+
+    private IEnumerator HostShutdownAfterNotify()
+    {
+        yield return null;
+        yield return new WaitForSeconds(0.1f);// ~100ms buffer
+
+        DoLocalShutdownAndReturnHome();
+
+        // Host also tears down the lobby
+        LobbyManager.Instance?.DeleteLobby();
+    }
+
+    private void DoLocalShutdownAndReturnHome()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            NetworkManager.Singleton.Shutdown();
+
         if (GamePlayManager.instance != null)
+        {
             GamePlayManager.ResetGameHasEnded();
             GamePlayManager.instance.Cleanup();
-        GamePlayManager.instance = null;
-        instance = null;
+            GamePlayManager.instance = null;
+        }
 
         var multiplayerObj = FindObjectOfType<MultiplayerManager>();
         if (multiplayerObj != null)
@@ -121,8 +128,8 @@ public class CardGameScene : MonoBehaviour
             Destroy(multiplayerObj.gameObject);
         }
 
+        instance = null;
         UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScene");
     }
-
 
 }

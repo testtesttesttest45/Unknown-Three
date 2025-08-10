@@ -5,7 +5,6 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-#pragma warning disable 0618
 
 public class GamePlayManager : NetworkBehaviour
 {
@@ -115,6 +114,15 @@ public class GamePlayManager : NetworkBehaviour
     public int currentPowerOwnerGlobalSeat = -1;
     private CardValue currentPowerValue = 0;
     private Coroutine safetyEndCoroutine;
+    private Coroutine hostHeartbeatCo;
+    private Coroutine clientWatchdogCo;
+    private float lastHostBeatTime = -1f;
+    [SerializeField] private float hostBeatInterval = 0.5f;
+    [SerializeField] private float hostFreezeThreshold = 1.6f;
+    [SerializeField] private float hostGoneThreshold = 8f;
+    private bool loadingShown = false;
+    private System.DateTime? _hostPausedAtUtc;
+    [SerializeField] private float hostAwayAssumeDeadSeconds = 20f;
 
     public static bool GameHasEnded { get; private set; } = false;
     public static void ResetGameHasEnded()
@@ -122,6 +130,57 @@ public class GamePlayManager : NetworkBehaviour
         GameHasEnded = false;
     }
 
+    void OnApplicationPause(bool paused)
+    {
+        if (!IsHost) return;
+
+        if (paused)
+        {
+            if (_hostPausedAtUtc == null) _hostPausedAtUtc = System.DateTime.UtcNow;
+        }
+        else
+        {
+            CheckHostLongPauseAndEnd();
+        }
+    }
+
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (!IsHost) return;
+
+        if (!hasFocus)
+        {
+            if (_hostPausedAtUtc == null) _hostPausedAtUtc = System.DateTime.UtcNow;
+        }
+        else
+        {
+            CheckHostLongPauseAndEnd();
+        }
+    }
+
+    private void CheckHostLongPauseAndEnd()
+    {
+        if (_hostPausedAtUtc == null) return;
+
+        double awaySec = (System.DateTime.UtcNow - _hostPausedAtUtc.Value).TotalSeconds;
+        _hostPausedAtUtc = null;
+
+        if (awaySec >= hostAwayAssumeDeadSeconds)
+        {
+            AssumeSessionDeadLocally($"[Host] Away {awaySec:0.0}s ≥ {hostAwayAssumeDeadSeconds}s — ending host session.");
+        }
+    }
+
+    private void AssumeSessionDeadLocally(string reason)
+    {
+        Debug.LogWarning(reason);
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            NetworkManager.Singleton.Shutdown();
+
+        var ui = FindObjectOfType<DisconnectUI>(true);
+        if (ui != null) ui.Show();
+    }
 
     public CardType CurrentType
     {
@@ -143,6 +202,7 @@ public class GamePlayManager : NetworkBehaviour
     System.DateTime pauseTime;
     int fastForwardTime = 0;
     bool setup = false, multiplayerLoaded = false, gameOver = false;
+
 
     void Start()
     {
@@ -166,18 +226,104 @@ public class GamePlayManager : NetworkBehaviour
 
         if (IsHost)
         {
-            // Count host as ready
+            if (hostHeartbeatCo != null) StopCoroutine(hostHeartbeatCo);
+            hostHeartbeatCo = StartCoroutine(HostHeartbeatRoutine());
+
+            lastHostBeatTime = Time.unscaledTime;
+
             readyClientIds.Add(NetworkManager.Singleton.LocalClientId);
-            // In case there are no other clients, start right away
             if (readyClientIds.Count == MultiplayerManager.Instance.playerDataNetworkList.Count)
                 StartMultiplayerGame();
         }
         else
         {
+            lastHostBeatTime = Time.unscaledTime;
+            if (clientWatchdogCo != null) StopCoroutine(clientWatchdogCo);
+            clientWatchdogCo = StartCoroutine(ClientWatchdogRoutine());
+
             NotifyReadyServerRpc();
         }
     }
 
+    private IEnumerator HostHeartbeatRoutine()
+    {
+        var wait = new WaitForSecondsRealtime(hostBeatInterval);
+        while (NetworkManager != null && NetworkManager.IsListening && IsHost)
+        {
+            var targets = GetAllHumanClientIds();
+            if (targets.Count > 0)
+            {
+                HeartbeatClientRpc(new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = targets }
+                });
+            }
+            yield return wait;
+        }
+    }
+
+    [ClientRpc]
+    private void HeartbeatClientRpc(ClientRpcParams rpcParams = default)
+    {
+        if (IsHost) return; // host ignores
+        lastHostBeatTime = Time.unscaledTime;
+
+        if (loadingShown) HideLoadingUI();
+    }
+
+    private IEnumerator ClientWatchdogRoutine()
+    {
+        var wait = new WaitForSecondsRealtime(0.1f);
+        while (NetworkManager != null && NetworkManager.IsListening && !IsHost)
+        {
+            float dt = Time.unscaledTime - lastHostBeatTime;
+
+            if (dt > hostFreezeThreshold && !loadingShown) ShowLoadingUI();
+            else if (dt <= hostFreezeThreshold && loadingShown) HideLoadingUI();
+
+            if (dt > hostGoneThreshold)
+            {
+                // Optional: give it a little more grace before declaring death
+                const float hardAssumeDeadAfter = 20f; // tune this as you like
+                if (dt > hardAssumeDeadAfter)
+                {
+                    ForceAssumeDisconnected("[Watchdog] No host heartbeat for too long; forcing local disconnect.");
+                    yield break;
+                }
+            }
+
+            yield return wait;
+        }
+    }
+
+    private void ForceAssumeDisconnected(string reason)
+    {
+        Debug.LogWarning(reason);
+
+        HideLoadingUI();
+
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.Shutdown();
+        }
+
+        var ui = FindObjectOfType<DisconnectUI>(true);
+        if (ui != null) ui.Show();
+    }
+
+    private void ShowLoadingUI()
+    {
+        if (loadingView != null) loadingView.SetActive(true);
+        if (rayCastBlocker != null) rayCastBlocker.SetActive(true);
+        loadingShown = true;
+    }
+
+    private void HideLoadingUI()
+    {
+        if (loadingView != null) loadingView.SetActive(false);
+        if (rayCastBlocker != null) rayCastBlocker.SetActive(false);
+        loadingShown = false;
+    }
 
     [ServerRpc(RequireOwnership = false)]
     public void NotifyReadyServerRpc(ServerRpcParams rpcParams = default)
@@ -195,10 +341,12 @@ public class GamePlayManager : NetworkBehaviour
     {
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
+
     void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
+
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (scene.name == "CardGameScene")
@@ -235,9 +383,18 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
+    public List<ulong> seatOrderGlobal = new List<ulong>();
+
     public void StartMultiplayerGame()
     {
         if (GameHasEnded) return;
+        if (IsHost)
+        {
+            // Freeze the seat order once
+            seatOrderGlobal.Clear();
+            foreach (var pd in MultiplayerManager.Instance.playerDataNetworkList)
+                seatOrderGlobal.Add(pd.clientId);
+        }
         menuButton.SetActive(true);
         if (cardDeckTransform != null)
             cardDeckTransform.gameObject.SetActive(true);
@@ -290,6 +447,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void DealCardsClientRpc(ulong[] clientIds, SerializableCard[] allCardsFlat, int cardsPerPlayer, int playerCount)
     {
+        seatOrderGlobal = new List<ulong>(clientIds);
         for (int globalSeat = 0; globalSeat < playerCount; globalSeat++)
         {
             ulong targetClientId = clientIds[globalSeat];
@@ -324,11 +482,20 @@ public class GamePlayManager : NetworkBehaviour
 
     void BeginLuckyWheelPhase()
     {
+        if (screenCanvas != null)
+        {
+            var disconnectUI = screenCanvas.GetComponentInChildren<DisconnectUI>();
+            if (disconnectUI != null && disconnectUI.gameObject.activeSelf)
+            {
+                Debug.LogWarning("[GamePlayManager] Disconnect UI is active, skipping Lucky Wheel phase.");
+                return;
+            }
+        }
         if (wheelUI == null)
         {
             if (IsHost)
             {
-                pendingStartGlobalIndex = Random.Range(0, MultiplayerManager.Instance.playerDataNetworkList.Count);
+                pendingStartGlobalIndex = Random.Range(0, seatOrderGlobal.Count); 
                 StartPlayerTurnForAllClientRpc(pendingStartGlobalIndex);
             }
             return;
@@ -343,8 +510,8 @@ public class GamePlayManager : NetworkBehaviour
 
     void HostPickWinnerAndSpin()
     {
-        var plist = MultiplayerManager.Instance.playerDataNetworkList;
-        int pCount = plist.Count; if (pCount == 0) return;
+        int pCount = seatOrderGlobal.Count;
+        if (pCount == 0) return;
 
         int winnerGlobalSeat = Random.Range(0, pCount);
 
@@ -401,7 +568,6 @@ public class GamePlayManager : NetworkBehaviour
             CardGameManager.PlaySound(GamePlayManager.instance.throw_card_clip);
         };
 
-        // one tween to the authoritative final angle
         yield return wheelUI.SpinTo(finalZ, duration);
     }
 
@@ -410,66 +576,45 @@ public class GamePlayManager : NetworkBehaviour
     {
         yield return new WaitForSeconds(delay + 0.05f);
         AnnounceWheelWinnerClientRpc(winnerGlobalSeat);
+
+        ulong winnerCid = GetClientIdFromGlobalSeat(winnerGlobalSeat);
+        if (winnerCid < 9000) // only humans, skip bots
+        {
+            PlayWinnerConfettiClientRpc(
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new[] { winnerCid } }
+                }
+            );
+        }
+
         yield return new WaitForSeconds(2f);
         HideWheelClientRpc();
 
         StartPlayerTurnForAllClientRpc(winnerGlobalSeat);
 
-        var list = MultiplayerManager.Instance.playerDataNetworkList;
-        if (winnerGlobalSeat >= 0 && winnerGlobalSeat < list.Count && list[winnerGlobalSeat].clientId >= 9000)
-            StartCoroutine(RunBotTurn(winnerGlobalSeat));
+        ulong cid = GetClientIdFromGlobalSeat(winnerGlobalSeat);
+        if (cid >= 9000) StartCoroutine(RunBotTurn(winnerGlobalSeat));
     }
 
-    [ClientRpc]
-    void SpinWheelClientRpc(int winnerGlobalSeat, int winnerPocketIndex, int extraSpins, float duration)
-    {
-        if (wheelUI == null) return;
-        StartCoroutine(SpinWheelPreAligned(winnerPocketIndex, extraSpins, duration));
-    }
-
-    IEnumerator SpinWheelPreAligned(int winnerPocketIndex, int extraSpins, float duration)
-    {
-        if (!wheelUI.gameObject.activeInHierarchy) wheelUI.Show();
-        yield return null;
-
-        float slice = 360f / 8f;
-        float pocketCenter = winnerPocketIndex * slice;
-
-        float finalZ = wheelUI.pointerOffsetDegrees + pocketCenter + extraSpins * 360f;
-
-        wheelUI.OnPocketTick = () => { CardGameManager.PlaySound(GamePlayManager.instance.throw_card_clip); };
-        yield return wheelUI.SpinTo(finalZ, duration);
-    }
 
     [ClientRpc]
     void AnnounceWheelWinnerClientRpc(int winnerGlobalSeat)
     {
         if (wheelUI == null) return;
 
-        var list = MultiplayerManager.Instance.playerDataNetworkList;
-
-        bool winnerIsBot =
-            winnerGlobalSeat >= 0 &&
-            winnerGlobalSeat < list.Count &&
-            list[winnerGlobalSeat].clientId >= 9000;
+        ulong winnerCid = GetClientIdFromGlobalSeat(winnerGlobalSeat);
+        bool winnerIsBot = (winnerCid >= 9000);
 
         ulong myId = NetworkManager.Singleton.LocalClientId;
-        int myGlobalSeat = -1;
-        for (int i = 0; i < list.Count; i++)
-            if (list[i].clientId == myId) { myGlobalSeat = i; break; }
-
+        int myGlobalSeat = seatOrderGlobal.IndexOf(myId);
         bool iAmWinner = (myGlobalSeat == winnerGlobalSeat);
 
-        if (!winnerIsBot && iAmWinner)
-        {
-            wheelUI.PlayLocalWinFX();
-        }
     }
 
     void BuildWheelVisualsLocal()
     {
-        var plist = MultiplayerManager.Instance.playerDataNetworkList;
-        int pCount = plist.Count;
+        int pCount = seatOrderGlobal.Count;
 
         for (int pocket = 0; pocket < 8; pocket++)
         {
@@ -515,21 +660,6 @@ public class GamePlayManager : NetworkBehaviour
     bool IsCardDefault(SerializableCard sc)
     {
         return sc.Equals(default(SerializableCard));
-    }
-
-    int MapClientIdToLocalSeat(ulong clientId)
-    {
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalSeat = 0;
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalSeat = i;
-        int playerCount = playerList.Count;
-        for (int localSeat = 0; localSeat < playerCount; localSeat++)
-            if (playerList[(myGlobalSeat + localSeat) % playerCount].clientId == clientId)
-                return localSeat;
-        return -1; // Not found
     }
 
     public void SetupNetworkedPlayerSeats()
@@ -655,14 +785,14 @@ public class GamePlayManager : NetworkBehaviour
         {
             CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
             CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
-            CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
+            CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King,CardValue.Fiend, CardValue.Skip
         };
 
         // purple only have King, Queen, Jack
         List<CardValue> purpleValues = new List<CardValue>
-    {
-        CardValue.Jack, CardValue.Queen, CardValue.King
-    };
+        {
+            CardValue.Jack, CardValue.Queen, CardValue.King
+        };
 
         // Red, Yellow, Green, Blue
         for (int j = 0; j < 4; j++)
@@ -795,51 +925,54 @@ public class GamePlayManager : NetworkBehaviour
             c.onClick = null;
         }
     }
+
+    private int MyGlobalSeat()
+    {
+        if (seatOrderGlobal == null || seatOrderGlobal.Count == 0) return 0;
+        ulong myId = NetworkManager.Singleton.LocalClientId;
+        return seatOrderGlobal.IndexOf(myId);
+    }
+
     public int GetGlobalIndexFromLocal(int localIndex)
     {
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalSeat = 0;
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalSeat = i;
-        int playerCount = playerList.Count;
-        return (myGlobalSeat + localIndex) % playerCount;
+        int n = seatOrderGlobal.Count;
+        if (n == 0) return 0;
+        return (MyGlobalSeat() + localIndex) % n;
     }
 
     public int GetLocalIndexFromGlobal(int globalIndex)
     {
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalSeat = 0;
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalSeat = i;
-        int playerCount = playerList.Count;
-        for (int localIndex = 0; localIndex < playerCount; localIndex++)
-            if ((myGlobalSeat + localIndex) % playerCount == globalIndex)
-                return localIndex;
-        return 0;
+        int n = seatOrderGlobal.Count;
+        if (n == 0) return 0;
+        return (globalIndex - MyGlobalSeat() + n) % n;
     }
 
-    public void NextPlayerIndex()
+    int MapClientIdToLocalSeat(ulong clientId)
     {
-        int step = clockwiseTurn ? 1 : -1;
-        do
-        {
-            currentPlayerIndex = Mod(currentPlayerIndex + step, players.Count);
-        } while (!players[currentPlayerIndex].isInRoom);
+        int global = seatOrderGlobal.IndexOf(clientId);
+        if (global < 0) return -1;
+        return GetLocalIndexFromGlobal(global);
     }
 
     public bool IsMyTurn()
     {
-        ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalIndex = -1;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalIndex = i;
-        return (myGlobalIndex == GetGlobalIndexFromLocal(currentPlayerIndex));
+        if (seatOrderGlobal.Count == 0) return false;
+        int globalTurn = GetGlobalIndexFromLocal(currentPlayerIndex);
+        ulong turnCid = seatOrderGlobal[globalTurn];
+        return turnCid == NetworkManager.Singleton.LocalClientId;
+    }
+
+    public int GetPlayerIndexFromClientId(ulong clientId) // returns GLOBAL seat index
+    {
+        return seatOrderGlobal.IndexOf(clientId);
+    }
+
+
+    public void NextPlayerIndex()
+    {
+        int step = clockwiseTurn ? 1 : -1;
+        // Do NOT skip seats based on isInRoom; disconnected players still occupy a seat.
+        currentPlayerIndex = Mod(currentPlayerIndex + step, players.Count);
     }
 
     [ClientRpc]
@@ -858,7 +991,7 @@ public class GamePlayManager : NetworkBehaviour
         }
         isTurnEnding = false;
         Jack.Instance.isJackRevealPhase = false;
-        ulong curClientId = MultiplayerManager.Instance.playerDataNetworkList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
+        ulong curClientId = seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)];
         peekedCardsByClientId.Remove(curClientId);
         hasPeekedCard = false;
         peekedCard = null;
@@ -877,29 +1010,23 @@ public class GamePlayManager : NetworkBehaviour
         previousPlayerIndex = currentPlayerIndex;
 
         ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        int myGlobalIndex = -1;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == myClientId)
-                myGlobalIndex = i;
+        ulong turnClientId = seatOrderGlobal[globalPlayerIndex];
+        bool isMyTurnNow = (turnClientId == myClientId);
 
-        if (myGlobalIndex == globalPlayerIndex && players[0].isUserPlayer)
+        if (isMyTurnNow && players[0].isUserPlayer)
         {
             deckInteractionLocked = false;
             EnableDeckClick();
             UpdateDeckClickability();
-
-            if (ShouldShowWasteArrow())
-                arrowObject2.SetActive(true);
-            else
-                arrowObject2.SetActive(false);
+            arrowObject2.SetActive(ShouldShowWasteArrow());
         }
         else
         {
             arrowObject.SetActive(false);
             arrowObject2.SetActive(false);
-            UpdateDeckClickability();
+            UpdateDeckClickability(); // this will disable deck due to IsMyTurn()==false
         }
+
 
         RefreshWasteInteractivity();
 
@@ -1068,8 +1195,7 @@ public class GamePlayManager : NetworkBehaviour
         if (Fiend.Instance != null)
             Fiend.Instance.HideFiendPopup();
         int localBotIndex = GetLocalIndexFromGlobal(botGlobalIndex);
-        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[botGlobalIndex].clientId;
-
+        ulong botClientId = GetClientIdFromGlobalSeat(botGlobalIndex);
         float waitBefore = Random.Range(1f, 2f);
         yield return new WaitForSeconds(waitBefore);
 
@@ -1200,29 +1326,37 @@ public class GamePlayManager : NetworkBehaviour
 
         RemoveTopWasteCardClientRpc();
 
-        ulong botClientId = MultiplayerManager.Instance.playerDataNetworkList[playerIndex].clientId;
+        int botGlobalSeat = GetGlobalIndexFromLocal(playerIndex);
+        ulong botClientId = GetClientIdFromGlobalSeat(botGlobalSeat);
         peekedCardsByClientId.Remove(botClientId);
         hasPeekedCard = false;
         peekedCard = null;
         wasteInteractionStarted = false;
     }
 
+    public ulong GetClientIdFromGlobalSeat(int globalSeat)
+    {
+        if (globalSeat < 0 || globalSeat >= seatOrderGlobal.Count) return ulong.MaxValue;
+        return seatOrderGlobal[globalSeat];
+    }
+
+    public int StableLocalToGlobal(int localSeat)
+    {
+        // where am I (globally) in the frozen order?
+        var myId = NetworkManager.Singleton.LocalClientId;
+        int myGlobal = seatOrderGlobal.IndexOf(myId);
+        if (myGlobal < 0) myGlobal = 0;
+        int n = seatOrderGlobal.Count;
+        return ((myGlobal + localSeat) % n + n) % n;
+    }
+
+
     public bool IsCurrentPlayerBot()
     {
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         int globalIndex = GetGlobalIndexFromLocal(currentPlayerIndex);
-        if (globalIndex < 0 || globalIndex >= playerList.Count) return false;
-        return playerList[globalIndex].clientId >= 9000;
-    }
-
-    public int GetPlayerIndexFromClientId(ulong clientId)
-    {
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        for (int i = 0; i < playerList.Count; i++)
-            if (playerList[i].clientId == clientId)
-                return i;
-        Debug.LogError($"[GetPlayerIndexFromClientId] Could not find clientId={clientId} in playerList!");
-        return -1;
+        if (globalIndex < 0 || globalIndex >= seatOrderGlobal.Count) return false;
+        return seatOrderGlobal[globalIndex] >= 9000;
     }
 
     public void EnableDeckClick()
@@ -1269,8 +1403,7 @@ public class GamePlayManager : NetworkBehaviour
         BroadcastTurnTimerClientRpc(0f, turnTimerDuration);
 
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-        ulong currentTurnClientId = playerList[GetGlobalIndexFromLocal(currentPlayerIndex)].clientId;
-
+        ulong currentTurnClientId = seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)];
         turnEndedByTimeout = true;
         ShowTimeoutMessageClientRpc(currentPlayerIndex);
 
@@ -1733,7 +1866,7 @@ public class GamePlayManager : NetworkBehaviour
         }
         if (clip != null)
         {
-            _audioSource.volume = 0.4f;
+            _audioSource.volume = 1f;
             _audioSource.PlayOneShot(clip);
         }
     }
@@ -2091,16 +2224,20 @@ public class GamePlayManager : NetworkBehaviour
                 break;
             }
         }
-        for (int seat = 0; seat < players.Count; seat++)
+        for (int localSeat = 0; localSeat < players.Count; localSeat++)
         {
-            ulong clientId = MultiplayerManager.Instance.playerDataNetworkList[seat].clientId;
-            int sortedIndex = sorted.IndexOf(players[seat]);
+            int globalSeat = GetGlobalIndexFromLocal(localSeat);
+            ulong clientId = GetClientIdFromGlobalSeat(globalSeat);
+            if (clientId == ulong.MaxValue) continue; // seat has no valid client
+
+            int sortedIndex = sorted.IndexOf(players[localSeat]);
             bool didWin = (sortedIndex == 0);
 
             PlayGameOverSoundClientRpc(didWin,
                 new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } } }
             );
         }
+
         ShowGameOverClientRpc();
         ShowWinnerResultDataClientRpc(results);
 
@@ -2247,9 +2384,51 @@ public class GamePlayManager : NetworkBehaviour
             StopCoroutine(turnTimerCoroutine);
             turnTimerCoroutine = null;
         }
+        if (hostHeartbeatCo != null) { StopCoroutine(hostHeartbeatCo); hostHeartbeatCo = null; }
+        if (clientWatchdogCo != null) { StopCoroutine(clientWatchdogCo); clientWatchdogCo = null; }
+        HideLoadingUI();
         SceneManager.sceneLoaded -= OnSceneLoaded;
         instance = null;
     }
+
+    [ClientRpc]
+    public void ShowDisconnectUIClientRpc()
+    {
+        if (GameHasEnded) return;
+        var ui = FindObjectOfType<DisconnectUI>(true);
+        if (ui != null) ui.Show();
+    }
+
+    public Sprite GetAvatarSpriteForGlobalSeatSafe(int globalSeat)
+    {
+        int localSeat = GetLocalIndexFromGlobal(globalSeat);
+        if (localSeat >= 0 && localSeat < players.Count)
+        {
+            var p2 = players[localSeat];
+            if (p2 != null && p2.avatarImage != null && p2.avatarImage.sprite != null)
+                return p2.avatarImage.sprite;
+        }
+
+        if (baseAvatarSprites != null &&
+            localSeat >= 0 &&
+            localSeat < baseAvatarSprites.Count &&
+            baseAvatarSprites[localSeat] != null)
+        {
+            return baseAvatarSprites[localSeat];
+        }
+
+        // Nothing available
+        return null;
+    }
+
+    [ClientRpc]
+    void PlayWinnerConfettiClientRpc(ClientRpcParams rpcParams = default)
+    {
+        if (wheelUI != null)
+            wheelUI.PlayLocalWinFX();
+    }
+
+
 }
 
 [System.Serializable]

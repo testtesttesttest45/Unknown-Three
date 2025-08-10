@@ -1,6 +1,7 @@
 using System.Collections;
-using UnityEngine;
+using System.Collections.Generic;
 using Unity.Netcode;
+using UnityEngine;
 
 public class Queen : NetworkBehaviour
 {
@@ -10,43 +11,63 @@ public class Queen : NetworkBehaviour
     private Card secondCardSelected = null;
     private bool isQueenSwapPhase = false;
 
-    private int firstLocalSeat, firstCardIndex;
+    private int firstLocalSeat = -1;
+    private int firstCardIndex = -1;
+
+    private GamePlayManager gpm => GamePlayManager.instance;
 
     void Awake() => Instance = this;
 
+    // normal Queen flow
     public void StartQueenSwap()
     {
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
+
         isQueenSwapPhase = true;
         firstCardSelected = null;
         secondCardSelected = null;
+        firstLocalSeat = -1;
+        firstCardIndex = -1;
 
-        foreach (var player in GamePlayManager.instance.players)
+        // Let the current player pick ANY two cards on the table
+        for (int seat = 0; seat < gpm.players.Count; seat++)
         {
-            for (int i = 0; i < player.cardsPanel.cards.Count; i++)
+            var p = gpm.players[seat];
+            if (p?.cardsPanel?.cards == null) continue;
+
+            for (int i = 0; i < p.cardsPanel.cards.Count; i++)
             {
-                var handCard = player.cardsPanel.cards[i];
+                var handCard = p.cardsPanel.cards[i];
+                if (handCard == null) continue;
+
                 handCard.ShowGlow(true);
                 handCard.IsClickable = true;
 
-                int capturedLocalSeat = GamePlayManager.instance.players.IndexOf(player);
+                int capturedLocalSeat = seat;
                 int capturedCardIndex = i;
 
-                handCard.onClick = (clickedCard) =>
-                {
-                    OnHandCardSelected(clickedCard, capturedLocalSeat, capturedCardIndex);
-                };
+                handCard.onClick = _ => OnHandCardSelected(handCard, capturedLocalSeat, capturedCardIndex);
             }
+        }
+
+        if (gpm.players[0].isUserPlayer)
+        {
+            gpm.players[0].SetTimerVisible(true);
+            gpm.players[0].UpdateTurnTimerUI(gpm.turnTimerDuration, gpm.turnTimerDuration);
         }
     }
 
     private void OnHandCardSelected(Card clickedCard, int localSeat, int cardIndex)
     {
-        if (!isQueenSwapPhase) return;
+        if (!isQueenSwapPhase || clickedCard == null) return;
 
+        // Deselection
         if (clickedCard == firstCardSelected)
         {
             clickedCard.ShowGlow(true);
             firstCardSelected = null;
+            firstLocalSeat = -1;
+            firstCardIndex = -1;
             return;
         }
 
@@ -56,19 +77,23 @@ public class Queen : NetworkBehaviour
             firstLocalSeat = localSeat;
             firstCardIndex = cardIndex;
             clickedCard.ShowGlow(false);
+            return;
         }
-        else if (secondCardSelected == null && clickedCard != firstCardSelected)
+
+        if (secondCardSelected == null)
         {
+            if (firstLocalSeat == localSeat && firstCardIndex == cardIndex) return;
+
             secondCardSelected = clickedCard;
-            clickedCard.ShowGlow(false);
+            secondCardSelected.ShowGlow(false);
 
             EndQueenSelectionPhase();
 
             int secondLocalSeat = localSeat;
             int secondCardIndex = cardIndex;
 
-            int firstGlobalSeat = GamePlayManager.instance.GetGlobalIndexFromLocal(firstLocalSeat);
-            int secondGlobalSeat = GamePlayManager.instance.GetGlobalIndexFromLocal(secondLocalSeat);
+            int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(firstLocalSeat);
+            int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(secondLocalSeat);
 
             RequestQueenSwapServerRpc(firstGlobalSeat, firstCardIndex, secondGlobalSeat, secondCardIndex);
         }
@@ -77,10 +102,14 @@ public class Queen : NetworkBehaviour
     private void EndQueenSelectionPhase()
     {
         isQueenSwapPhase = false;
-        foreach (var player in GamePlayManager.instance.players)
+
+        if (gpm == null || gpm.players == null) return;
+        foreach (var player in gpm.players)
         {
+            if (player?.cardsPanel?.cards == null) continue;
             foreach (var card in player.cardsPanel.cards)
             {
+                if (card == null) continue;
                 card.ShowGlow(false);
                 card.IsClickable = false;
                 card.onClick = null;
@@ -88,108 +117,129 @@ public class Queen : NetworkBehaviour
         }
     }
 
+    
     [ServerRpc(RequireOwnership = false)]
     private void RequestQueenSwapServerRpc(int playerAIndex, int cardAIndex, int playerBIndex, int cardBIndex, ServerRpcParams rpcParams = default)
     {
-        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
+        if (gpm.turnTimeoutCoroutine != null)
         {
-            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
-            GamePlayManager.instance.turnTimeoutCoroutine = null;
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.turnTimeoutCoroutine = null;
         }
-        GamePlayManager.instance.FreezeTimerUI();
+        gpm.FreezeTimerUI();
 
-        var players = GamePlayManager.instance.players;
+        if (gpm.players == null || gpm.players.Count == 0) return;
 
-        var cardA = players[playerAIndex].cardsPanel.cards[cardAIndex];
-        var cardB = players[playerBIndex].cardsPanel.cards[cardBIndex];
+        int localA = gpm.GetLocalIndexFromGlobal(playerAIndex);
+        int localB = gpm.GetLocalIndexFromGlobal(playerBIndex);
+        if (localA < 0 || localA >= gpm.players.Count) return;
+        if (localB < 0 || localB >= gpm.players.Count) return;
 
-        SerializableCard dataA = new SerializableCard(cardA.Type, cardA.Value);
-        SerializableCard dataB = new SerializableCard(cardB.Type, cardB.Value);
+        var pA = gpm.players[localA];
+        var pB = gpm.players[localB];
+        if (pA?.cardsPanel?.cards == null || pB?.cardsPanel?.cards == null) return;
+        if (cardAIndex < 0 || cardAIndex >= pA.cardsPanel.cards.Count) return;
+        if (cardBIndex < 0 || cardBIndex >= pB.cardsPanel.cards.Count) return;
 
-        cardA.Type = dataB.Type;
-        cardA.Value = dataB.Value;
-        cardA.CalcPoint();
+        var cardA = pA.cardsPanel.cards[cardAIndex];
+        var cardB = pB.cardsPanel.cards[cardBIndex];
+        if (cardA == null || cardB == null) return;
 
-        cardB.Type = dataA.Type;
-        cardB.Value = dataA.Value;
-        cardB.CalcPoint();
+        var dataA = new SerializableCard(cardA.Type, cardA.Value);
+        var dataB = new SerializableCard(cardB.Type, cardB.Value);
 
         QueenSwapClientRpc(playerAIndex, cardAIndex, dataB, playerBIndex, cardBIndex, dataA);
-
     }
-
+    
     [ClientRpc]
-    private void QueenSwapClientRpc(int playerAIndex, int cardAIndex, SerializableCard newA, int playerBIndex, int cardBIndex, SerializableCard newB)
+    private void QueenSwapClientRpc(int playerAIndex, int cardAIndex, SerializableCard newA,
+                                    int playerBIndex, int cardBIndex, SerializableCard newB)
     {
-        var players = GamePlayManager.instance.players;
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
 
-        int localASeat = GamePlayManager.instance.GetLocalIndexFromGlobal(playerAIndex);
-        int localBSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(playerBIndex);
+        int localASeat = gpm.GetLocalIndexFromGlobal(playerAIndex);
+        int localBSeat = gpm.GetLocalIndexFromGlobal(playerBIndex);
+        if (localASeat < 0 || localASeat >= gpm.players.Count) return;
+        if (localBSeat < 0 || localBSeat >= gpm.players.Count) return;
 
-        var playerA = players[localASeat];
-        var playerB = players[localBSeat];
+        var playerA = gpm.players[localASeat];
+        var playerB = gpm.players[localBSeat];
+        if (playerA?.cardsPanel?.cards == null || playerB?.cardsPanel?.cards == null) return;
+
+        if (cardAIndex < 0 || cardAIndex >= playerA.cardsPanel.cards.Count) return;
+        if (cardBIndex < 0 || cardBIndex >= playerB.cardsPanel.cards.Count) return;
 
         var panelA = playerA.cardsPanel;
         var panelB = playerB.cardsPanel;
 
-        var tempCard = panelA.cards[cardAIndex];
-        panelA.cards[cardAIndex] = panelB.cards[cardBIndex];
-        panelB.cards[cardBIndex] = tempCard;
-
         var cardA = panelA.cards[cardAIndex];
         var cardB = panelB.cards[cardBIndex];
+        if (cardA == null || cardB == null) return;
 
-        cardA.Type = newA.Type;
-        cardA.Value = newA.Value;
-        cardA.CalcPoint();
-        cardA.IsOpen = false;
-        cardA.UpdateCard();
+        panelA.cards[cardAIndex] = cardB;
+        panelB.cards[cardBIndex] = cardA;
 
-        cardB.Type = newB.Type;
-        cardB.Value = newB.Value;
-        cardB.CalcPoint();
-        cardB.IsOpen = false;
-        cardB.UpdateCard();
+        var movedA = panelA.cards[cardAIndex];
+        var movedB = panelB.cards[cardBIndex];
 
-        cardA.transform.SetParent(panelA.transform, true);
-        cardB.transform.SetParent(panelB.transform, true);
+        // card that ends in A gets newA
+        movedA.Type = newA.Type;
+        movedA.Value = newA.Value;
+        movedA.CalcPoint();
+        movedA.IsOpen = false;
+        movedA.UpdateCard();
+        movedA.transform.SetParent(panelA.transform, true);
 
+        // card that ends in B gets newB
+        movedB.Type = newB.Type;
+        movedB.Value = newB.Value;
+        movedB.CalcPoint();
+        movedB.IsOpen = false;
+        movedB.UpdateCard();
+        movedB.transform.SetParent(panelB.transform, true);
+
+        // Fix indices
         playerA.ResyncCardIndices();
-        if (playerB != playerA)
-            playerB.ResyncCardIndices();
+        if (playerB != playerA) playerB.ResyncCardIndices();
 
-        StartCoroutine(AnimateCardSwap(cardA, cardB, panelA, panelB));
+        StartCoroutine(AnimateCardSwap(movedA, movedB, panelA, panelB));
     }
 
-    private IEnumerator AnimateCardSwap(Card cardA, Card cardB, PlayerCards panelA, PlayerCards panelB)
+    private IEnumerator AnimateCardSwap(Card cardInA, Card cardInB, PlayerCards panelA, PlayerCards panelB)
     {
+        if (cardInA == null || cardInB == null) yield break;
+
         panelA.autoUpdatePositions = false;
         panelB.autoUpdatePositions = false;
 
-        Vector3 posA = cardA.transform.position;
-        Vector3 posB = cardB.transform.position;
+        Vector3 posA = cardInA.transform.position;
+        Vector3 posB = cardInB.transform.position;
 
         float duration = 0.35f;
         float elapsed = 0f;
 
-        // Animate the swap
         while (elapsed < duration)
         {
-            cardA.transform.position = Vector3.Lerp(posA, posB, elapsed / duration);
-            cardB.transform.position = Vector3.Lerp(posB, posA, elapsed / duration);
+            if (cardInA == null || cardInB == null) yield break;
+
+            cardInA.transform.position = Vector3.Lerp(posA, posB, elapsed / duration);
+            cardInB.transform.position = Vector3.Lerp(posB, posA, elapsed / duration);
             elapsed += Time.deltaTime;
             yield return null;
         }
-        cardA.transform.position = posB;
-        cardB.transform.position = posA;
 
-        if (GamePlayManager.instance.draw_card_clip != null && GamePlayManager.instance._audioSource != null)
-            GamePlayManager.instance._audioSource.PlayOneShot(GamePlayManager.instance.draw_card_clip, 0.9f);
+        if (cardInA == null || cardInB == null) yield break;
 
-        cardA.transform.localRotation = Quaternion.identity;
-        cardA.transform.localScale = Vector3.one;
-        cardB.transform.localRotation = Quaternion.identity;
-        cardB.transform.localScale = Vector3.one;
+        cardInA.transform.position = posB;
+        cardInB.transform.position = posA;
+
+        if (gpm.draw_card_clip != null && gpm._audioSource != null)
+            gpm._audioSource.PlayOneShot(gpm.draw_card_clip, 0.9f);
+
+        cardInA.transform.localRotation = Quaternion.identity;
+        cardInA.transform.localScale = Vector3.one;
+        cardInB.transform.localRotation = Quaternion.identity;
+        cardInB.transform.localScale = Vector3.one;
 
         panelA.autoUpdatePositions = true;
         panelB.autoUpdatePositions = true;
@@ -197,17 +247,18 @@ public class Queen : NetworkBehaviour
         panelA.UpdatePos();
         panelB.UpdatePos();
 
-        cardA.FlashMarkedOutline();
-        cardB.FlashMarkedOutline();
+        cardInA.FlashMarkedOutline();
+        cardInB.FlashMarkedOutline();
 
         yield return new WaitForSeconds(2f);
 
-        GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
+        gpm.EndCurrentPowerAvatarFromServer();
 
-        if (NetworkManager.Singleton.IsHost)
-            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0f));
+        if (IsHost)
+            gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0f));
     }
 
+    // bot handling
     public void StartBotQueenSwapPhase(ulong botClientId)
     {
         StartCoroutine(BotQueenSwapRoutine(botClientId));
@@ -215,33 +266,32 @@ public class Queen : NetworkBehaviour
 
     private IEnumerator BotQueenSwapRoutine(ulong botClientId)
     {
-        // Bot thinking time: 1 to 3 seconds
+        // thinking
         yield return new WaitForSeconds(Random.Range(1f, 2f));
 
-        var gpm = GamePlayManager.instance;
-        var candidates = new System.Collections.Generic.List<(int seat, int cardIndex)>();
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) yield break;
 
+        var candidates = new List<(int seat, int cardIndex)>();
         for (int seat = 0; seat < gpm.players.Count; seat++)
         {
-            var player = gpm.players[seat];
-            for (int cardIndex = 0; cardIndex < player.cardsPanel.cards.Count; cardIndex++)
+            var p = gpm.players[seat];
+            if (p?.cardsPanel?.cards == null) continue;
+
+            for (int i = 0; i < p.cardsPanel.cards.Count; i++)
             {
-                if (player.cardsPanel.cards[cardIndex] != null)
-                    candidates.Add((seat, cardIndex));
+                if (p.cardsPanel.cards[i] != null)
+                    candidates.Add((seat, i));
             }
         }
 
         if (candidates.Count < 2) yield break;
 
-        int firstIdx = Random.Range(0, candidates.Count);
-        int secondIdx;
-        do
-        {
-            secondIdx = Random.Range(0, candidates.Count);
-        } while (secondIdx == firstIdx);
+        int a = Random.Range(0, candidates.Count);
+        int b;
+        do { b = Random.Range(0, candidates.Count); } while (b == a);
 
-        var first = candidates[firstIdx];
-        var second = candidates[secondIdx];
+        var first = candidates[a];
+        var second = candidates[b];
 
         int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(first.seat);
         int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(second.seat);
@@ -252,8 +302,4 @@ public class Queen : NetworkBehaviour
             new ServerRpcParams { Receive = new ServerRpcReceiveParams { SenderClientId = botClientId } }
         );
     }
-
-
-
-
 }

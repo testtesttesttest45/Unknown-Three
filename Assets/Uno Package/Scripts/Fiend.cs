@@ -13,120 +13,244 @@ public class Fiend : NetworkBehaviour
     public GameObject fiendPopup;
     public Transform avatarPanel;
     public GameObject playerRowPrefab;
+
     [Header("Audio")]
     private AudioSource _audioSource;
     public AudioClip swapCardClip;
+
     [SerializeField] Toggle jumbleToggle;
+
+    private GamePlayManager gpm => GamePlayManager.instance;
 
     void Awake()
     {
         Instance = this;
         _audioSource = GetComponent<AudioSource>();
-        if (_audioSource == null)
-            _audioSource = gameObject.AddComponent<AudioSource>();
+        if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
     }
 
+    // normal flow of Fiend
     public void ShowFiendPopup()
     {
-        fiendPopup.SetActive(true);
-        if (jumbleToggle != null)
-            jumbleToggle.isOn = false;
+        if (fiendPopup == null || avatarPanel == null || playerRowPrefab == null) return;
 
-        foreach (Transform child in avatarPanel)
-            Destroy(child.gameObject);
+        fiendPopup.SetActive(true);
+        if (jumbleToggle != null) jumbleToggle.isOn = false;
+
+        foreach (Transform child in avatarPanel) Destroy(child.gameObject);
+        if (gpm == null || gpm.seatOrderGlobal == null || gpm.seatOrderGlobal.Count == 0) return;
 
         ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
 
-        for (int globalSeat = 0; globalSeat < playerList.Count; globalSeat++)
+        for (int globalSeat = 0; globalSeat < gpm.seatOrderGlobal.Count; globalSeat++)
         {
-            var pd = playerList[globalSeat];
-            if (pd.clientId == myClientId)
-                continue; // skip self
+            ulong cid = gpm.seatOrderGlobal[globalSeat];
 
-            int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(globalSeat);
-            var p = GamePlayManager.instance.players[localSeat];
+            // Skip myself only
+            if (cid == myClientId) continue;
 
-            int targetGlobalSeat = globalSeat;
+            GameObject row = Instantiate(playerRowPrefab, avatarPanel);
 
-            GameObject avatarEntry = Instantiate(playerRowPrefab, avatarPanel);
+            int localSeat = gpm.GetLocalIndexFromGlobal(globalSeat);
+            Player2 p = (localSeat >= 0 && localSeat < gpm.players.Count) ? gpm.players[localSeat] : null;
 
-            var avatarImg = avatarEntry.transform.Find("AvatarImage")?.GetComponent<Image>();
-            if (avatarImg != null && p.avatarImage != null)
-                avatarImg.sprite = p.avatarImage.sprite;
-
-            var nameText = avatarEntry.transform.Find("NameText")?.GetComponent<TextMeshProUGUI>();
+            var nameText = row.transform.Find("NameText")?.GetComponent<TextMeshProUGUI>();
             if (nameText != null)
-                nameText.text = p.playerName;
+            {
+                string label = p != null && !string.IsNullOrEmpty(p.playerName)
+                    ? p.playerName
+                    : TryGetNameFromPlayerData(cid) ?? $"Player {globalSeat + 1}";
+                nameText.text = label;
 
-            Button btn = avatarEntry.GetComponent<Button>() ?? avatarEntry.AddComponent<Button>();
+                // append "disconnected" to the name
+                if (!IsClientIdPresentInPlayerData(cid))
+                    nameText.text += " (disconnected)";
+            }
+
+            var avatarImg = row.transform.Find("AvatarImage")?.GetComponent<Image>();
+            if (avatarImg != null)
+            {
+                Sprite s = gpm.GetAvatarSpriteForGlobalSeatSafe(globalSeat);
+                if (s != null) avatarImg.sprite = s;
+            }
+
+            int capturedGlobalSeat = globalSeat;
+            var btn = row.GetComponent<Button>() ?? row.AddComponent<Button>();
             btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(() => OnOpponentSelected(targetGlobalSeat));
+            btn.onClick.AddListener(() => OnOpponentSelected(capturedGlobalSeat));
         }
+
     }
 
-    private void OnOpponentSelected(int targetSeat)
+    private bool IsClientIdPresentInPlayerData(ulong clientId)
     {
-        fiendPopup.SetActive(false);
+        var list = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].clientId == clientId) return true;
+        return false;
+    }
+
+    private string TryGetNameFromPlayerData(ulong clientId)
+    {
+        var list = MultiplayerManager.Instance.playerDataNetworkList;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].clientId == clientId)
+                return list[i].playerName.ToString();
+        return null;
+    }
+
+
+    public void HideFiendPopup()
+    {
+        if (fiendPopup != null) fiendPopup.SetActive(false);
+    }
+
+    private void OnOpponentSelected(int targetGlobalSeat)
+    {
+        HideFiendPopup();
 
         if (jumbleToggle != null && jumbleToggle.isOn)
         {
-            // FAKE jumble for all clients (no real data change)
-            RequestVisualJumbleHandServerRpc(targetSeat);
+            // Visual-only jumble (no data change)
+            RequestVisualJumbleHandServerRpc(targetGlobalSeat);
         }
         else
         {
-            // REAL jumble, notify server to perform and sync
-            RequestJumbleHandServerRpc(targetSeat);
+            // Real jumble (reorders hand)
+            RequestJumbleHandServerRpc(targetGlobalSeat);
         }
-
     }
 
-
+    // authoritative true jumble
     [ServerRpc(RequireOwnership = false)]
-    private void RequestJumbleHandServerRpc(int seatIndex, ServerRpcParams rpcParams = default)
+    private void RequestJumbleHandServerRpc(int targetGlobalSeat, ServerRpcParams rpcParams = default)
     {
-        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
-        {
-            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
-            GamePlayManager.instance.turnTimeoutCoroutine = null;
-        }
-        GamePlayManager.instance.FreezeTimerUI();
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
 
-        // Build a random target hand order (shuffle result)
-        var hand = GamePlayManager.instance.players[seatIndex].cardsPanel.cards;
+        // Pause/Freeze timer
+        if (gpm.turnTimeoutCoroutine != null)
+        {
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.turnTimeoutCoroutine = null;
+        }
+        gpm.FreezeTimerUI();
+
+        int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
+        if (localSeat < 0 || localSeat >= gpm.players.Count) return;
+
+        var hand = gpm.players[localSeat].cardsPanel?.cards;
+        if (hand == null || hand.Count <= 1) 
+        {
+            FinishPowerAndAdvanceTurn();
+            return;
+        }
+
         int cardCount = hand.Count;
-        List<int> indices = new List<int>();
-        for (int i = 0; i < cardCount; i++) indices.Add(i);
-        for (int i = cardCount - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
-        }
+        List<int> indices = BuildRandomPermutation(cardCount);
 
-        // Send to all clients for animated jumble
-        JumbleHandClientRpc(seatIndex, indices.ToArray());
+        // Broadcast to everybody to animate & apply final order
+        JumbleHandClientRpc(targetGlobalSeat, indices.ToArray());
     }
 
     [ClientRpc]
-    private void JumbleHandClientRpc(int seatIndex, int[] newOrder)
+    private void JumbleHandClientRpc(int targetGlobalSeat, int[] newOrder)
     {
-        GamePlayManager.instance.FreezeTimerUI();
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
 
-        int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(seatIndex);
-        var player = GamePlayManager.instance.players[localSeat];
-        var hand = player.cardsPanel.cards;
+        gpm.FreezeTimerUI();
 
-        player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, true, () =>
+        int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
+        if (localSeat < 0 || localSeat >= gpm.players.Count) return;
+
+        var player = gpm.players[localSeat];
+        var hand = player.cardsPanel?.cards;
+        if (hand == null || hand.Count == 0 || newOrder == null || newOrder.Length != hand.Count)
         {
-            GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
-            if (IsHost && NetworkManager.Singleton.IsServer)
-                GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
-        }));
+            // Fail-safe finish
+            if (IsHost) FinishPowerAndAdvanceTurn();
+            return;
+        }
+
+        // Animate and then commit new order (updateCardData=true)
+        player.StartCoroutine(JumbleHandAnimation(
+            player, hand, newOrder, 3.0f, true,
+            () =>
+            {
+                gpm.EndCurrentPowerAvatarFromServer();
+                if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+            }
+        ));
     }
 
-    public IEnumerator JumbleHandAnimation(Player2 player, List<Card> hand, int[] finalOrder, float duration, bool updateCardData, System.Action onComplete)
+    // fake jumble, visual only
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestVisualJumbleHandServerRpc(int targetGlobalSeat, ServerRpcParams rpcParams = default)
     {
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
+
+        if (gpm.turnTimeoutCoroutine != null)
+        {
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.turnTimeoutCoroutine = null;
+        }
+        gpm.FreezeTimerUI();
+
+        int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
+        if (localSeat < 0 || localSeat >= gpm.players.Count) { FinishPowerAndAdvanceTurn(); return; }
+
+        var hand = gpm.players[localSeat].cardsPanel?.cards;
+        if (hand == null || hand.Count <= 1) { FinishPowerAndAdvanceTurn(); return; }
+
+        int cardCount = hand.Count;
+        List<int> indices = BuildRandomPermutation(cardCount);
+
+        VisualJumbleHandClientRpc(targetGlobalSeat, indices.ToArray());
+    }
+
+    [ClientRpc]
+    private void VisualJumbleHandClientRpc(int targetGlobalSeat, int[] newOrder)
+    {
+        if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
+
+        gpm.FreezeTimerUI();
+
+        int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
+        if (localSeat < 0 || localSeat >= gpm.players.Count) return;
+
+        var player = gpm.players[localSeat];
+        var hand = player.cardsPanel?.cards;
+        if (hand == null || hand.Count == 0 || newOrder == null || newOrder.Length != hand.Count)
+        {
+            if (IsHost) FinishPowerAndAdvanceTurn();
+            return;
+        }
+
+        // Animate only (updateCardData=false), then snap back to original layout
+        player.StartCoroutine(JumbleHandAnimation(
+            player, hand, newOrder, 3.0f, false,
+            () =>
+            {
+                player.cardsPanel.UpdatePos();
+                if (IsHost)
+                {
+                    gpm.EndCurrentPowerAvatarFromServer();
+                    gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                }
+            }
+        ));
+    }
+
+    // helpers
+    public IEnumerator JumbleHandAnimation(
+        Player2 player,
+        List<Card> hand,
+        int[] finalOrder,
+        float durationSeconds,
+        bool updateCardData,
+        System.Action onComplete)
+    {
+        if (player == null || player.cardsPanel == null || hand == null || hand.Count == 0) yield break;
+
         float timer = 0f;
         int cardCount = hand.Count;
 
@@ -136,66 +260,77 @@ public class Fiend : NetworkBehaviour
 
         List<Card> workingHand = updateCardData ? hand : new List<Card>(hand);
 
-        while (timer < duration)
+        const float swapAnim = 0.18f;
+        while (timer < durationSeconds && cardCount > 1)
         {
             int a = Random.Range(0, cardCount);
-            int b;
-            do { b = Random.Range(0, cardCount); } while (b == a);
+            int b; do { b = Random.Range(0, cardCount); } while (b == a);
 
-            Vector3 posA = workingHand[a].transform.localPosition;
-            Vector3 posB = workingHand[b].transform.localPosition;
+            var ca = workingHand[a];
+            var cb = workingHand[b];
+            if (ca == null || cb == null) { timer += swapAnim; continue; }
+
+            Vector3 posA = ca.transform.localPosition;
+            Vector3 posB = cb.transform.localPosition;
 
             float elapsed = 0f;
-            float swapAnim = 0.18f;
             while (elapsed < swapAnim)
             {
                 float t = elapsed / swapAnim;
-                workingHand[a].transform.localPosition = Vector3.Lerp(posA, posB, t);
-                workingHand[b].transform.localPosition = Vector3.Lerp(posB, posA, t);
+                if (ca != null) ca.transform.localPosition = Vector3.Lerp(posA, posB, t);
+                if (cb != null) cb.transform.localPosition = Vector3.Lerp(posB, posA, t);
                 elapsed += Time.deltaTime;
                 yield return null;
             }
-            workingHand[a].transform.localPosition = posB;
-            workingHand[b].transform.localPosition = posA;
+            if (ca != null) ca.transform.localPosition = posB;
+            if (cb != null) cb.transform.localPosition = posA;
 
-            var temp = workingHand[a];
+            var tmp = workingHand[a];
             workingHand[a] = workingHand[b];
-            workingHand[b] = temp;
+            workingHand[b] = tmp;
 
             if (swapCardClip != null && _audioSource != null)
                 _audioSource.PlayOneShot(swapCardClip);
+
             timer += swapAnim;
         }
 
         yield return new WaitForSeconds(0.2f);
 
-        // Snap to final order and update positions
-        List<Card> oldHand = new List<Card>(workingHand);
-        List<Card> newHand = new List<Card>();
+        if (finalOrder == null || finalOrder.Length != cardCount)
+        {
+            for (int i = 0; i < cardCount; i++)
+                if (workingHand[i] != null)
+                    workingHand[i].transform.localPosition = slotPositions[i];
+
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        var oldWorking = new List<Card>(workingHand);
+        var newHand = new List<Card>(cardCount);
         for (int i = 0; i < finalOrder.Length; i++)
         {
-            Card c = oldHand[finalOrder[i]];
+            int src = Mathf.Clamp(finalOrder[i], 0, oldWorking.Count - 1);
+            Card c = oldWorking[src];
             newHand.Add(c);
-            c.transform.localPosition = slotPositions[i];
+            if (c != null) c.transform.localPosition = slotPositions[i];
         }
+
         if (updateCardData)
         {
             player.cardsPanel.cards.Clear();
             player.cardsPanel.cards.AddRange(newHand);
-            for (int i = 0; i < newHand.Count; i++)
-                newHand[i].cardIndex = i;
+            for (int i = 0; i < player.cardsPanel.cards.Count; i++)
+                if (player.cardsPanel.cards[i] != null)
+                    player.cardsPanel.cards[i].cardIndex = i;
         }
-        player.cardsPanel.UpdatePos();
 
+        player.cardsPanel.UpdatePos();
         onComplete?.Invoke();
     }
 
-
-    public void HideFiendPopup()
-    {
-        fiendPopup.SetActive(false);
-    }
-
+    // bot handling
     public void StartBotFiendJumble(ulong botClientId)
     {
         StartCoroutine(BotFiendJumbleRoutine(botClientId));
@@ -205,70 +340,42 @@ public class Fiend : NetworkBehaviour
     {
         yield return new WaitForSeconds(Random.Range(1f, 2f));
 
-        var gpm = GamePlayManager.instance;
-        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        if (gpm == null) yield break;
 
-        // Find all opponents (not self/bot)
-        List<int> targetSeats = new List<int>();
+        var playerList = MultiplayerManager.Instance.playerDataNetworkList;
+        var targets = new List<int>();
+
         for (int globalSeat = 0; globalSeat < playerList.Count; globalSeat++)
         {
             if (playerList[globalSeat].clientId != botClientId)
-                targetSeats.Add(globalSeat);
+                targets.Add(globalSeat);
         }
+        if (targets.Count == 0) yield break;
 
-        if (targetSeats.Count == 0) yield break;
+        int targetGlobalSeat = targets[Random.Range(0, targets.Count)];
 
-        int randomTarget = targetSeats[Random.Range(0, targetSeats.Count)];
-        RequestJumbleHandServerRpc(randomTarget, new ServerRpcParams
-        {
-            Receive = new ServerRpcReceiveParams { SenderClientId = botClientId }
-        });
+        RequestJumbleHandServerRpc(
+            targetGlobalSeat,
+            new ServerRpcParams { Receive = new ServerRpcReceiveParams { SenderClientId = botClientId } }
+        );
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    private void RequestVisualJumbleHandServerRpc(int seatIndex, ServerRpcParams rpcParams = default)
+    // helpers
+    private static List<int> BuildRandomPermutation(int n)
     {
-        if (GamePlayManager.instance.turnTimeoutCoroutine != null)
-        {
-            GamePlayManager.instance.StopCoroutine(GamePlayManager.instance.turnTimeoutCoroutine);
-            GamePlayManager.instance.turnTimeoutCoroutine = null;
-        }
-        GamePlayManager.instance.FreezeTimerUI();
-        // Build a random visual shuffle order
-        var hand = GamePlayManager.instance.players[seatIndex].cardsPanel.cards;
-        int cardCount = hand.Count;
-        List<int> indices = new List<int>();
-        for (int i = 0; i < cardCount; i++) indices.Add(i);
-        for (int i = cardCount - 1; i > 0; i--)
+        var idx = new List<int>(n);
+        for (int i = 0; i < n; i++) idx.Add(i);
+        for (int i = n - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
-            int temp = indices[i]; indices[i] = indices[j]; indices[j] = temp;
+            (idx[i], idx[j]) = (idx[j], idx[i]);
         }
-        // Send to all clients for animated jumble (visual only)
-        VisualJumbleHandClientRpc(seatIndex, indices.ToArray());
+        return idx;
     }
 
-    [ClientRpc]
-    private void VisualJumbleHandClientRpc(int seatIndex, int[] newOrder)
+    private void FinishPowerAndAdvanceTurn()
     {
-        GamePlayManager.instance.FreezeTimerUI();
-
-        int localSeat = GamePlayManager.instance.GetLocalIndexFromGlobal(seatIndex);
-        var player = GamePlayManager.instance.players[localSeat];
-        var hand = player.cardsPanel.cards;
-
-        player.StartCoroutine(JumbleHandAnimation(player, hand, newOrder, 3.0f, false, () =>
-        {
-            player.cardsPanel.UpdatePos();
-            if (NetworkManager.Singleton.IsHost && NetworkManager.Singleton.IsServer)
-            {
-                GamePlayManager.instance.EndCurrentPowerAvatarFromServer();
-                GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
-            }
-        }));
+        gpm.EndCurrentPowerAvatarFromServer();
+        if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
     }
-
-
-
-
 }

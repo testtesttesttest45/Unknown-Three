@@ -20,11 +20,6 @@ public static class SessionManager
         if (LobbyManager.Instance != null)
             Object.Destroy(LobbyManager.Instance.gameObject);
 
-        // reset all static or global flags and UI references
-        GameOverUI.GameHasEnded = false;
-        Bot.GameHasStarted = false;
-        GamePauseUI.Instance?.HidePause();
-        GamePauseUI.Instance = null;
     }
 }
 

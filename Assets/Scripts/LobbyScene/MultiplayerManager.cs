@@ -149,7 +149,6 @@ public class MultiplayerManager : NetworkBehaviour
             data.avatarIndex = avatarIndex;
             playerDataNetworkList[index] = data;
 
-            // 👇 Fire update event manually so UI refreshes immediately
             OnPlayerDataNetworkListChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -164,7 +163,6 @@ public class MultiplayerManager : NetworkBehaviour
             playerData.playerName = playerName;
             playerDataNetworkList[playerDataIndex] = playerData;
 
-            // 👇 Trigger UI refresh
             OnPlayerDataNetworkListChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -250,34 +248,15 @@ public class MultiplayerManager : NetworkBehaviour
         }
     }
 
-    
+
 
     private void ShowHostDisconnectedUI()
     {
-        if (GameOverUI.GameHasEnded)
+        var ui = FindObjectOfType<DisconnectUI>(true);
+        if (ui != null)
         {
-            return;
-        }
-
-        var gameOverUI = GameObject.FindObjectOfType<GameOverUI>(true);
-        if (gameOverUI != null)
-        {
-            var tutorialUI = GameObject.FindObjectOfType<TutorialUI>(true);
-            if (tutorialUI != null) tutorialUI.gameObject.SetActive(false);
-
-            var disconnectUI = GameObject.FindObjectOfType<HostDisconnectUI>(true);
-            if (disconnectUI != null) disconnectUI.Hide();
-
-            gameOverUI.ShowGameOver("The other player has disconnected", -1);
-            GameOverUI.GameHasEnded = true;
-            return;
-        }
-
-        // Fallback if GameOverUI is not found
-        HostDisconnectUI hostDisconnectUI = FindObjectOfType<HostDisconnectUI>(true);
-        if (hostDisconnectUI != null)
-        {
-            hostDisconnectUI.gameObject.SetActive(true);
+            ui.gameObject.SetActive(true);
+            ui.Show();
         }
     }
 
@@ -553,23 +532,21 @@ public class MultiplayerManager : NetworkBehaviour
 
     public void Cleanup()
     {
-        // Unsubscribe from Netcode events
+        // Netcode events
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientConnectedCallback -= NetworkManager_OnClientConnectedCallback;
             NetworkManager.Singleton.OnClientDisconnectCallback -= NetworkManager_Server_OnClientDisconnectCallback;
             NetworkManager.Singleton.ConnectionApprovalCallback -= NetworkManager_ConnectionApprovalCallback;
-            // (For clients)
             NetworkManager.Singleton.OnClientConnectedCallback -= NetworkManager_Client_OnClientConnectedCallback;
             NetworkManager.Singleton.OnClientDisconnectCallback -= NetworkManager_Client_OnClientDisconnectCallback;
         }
 
-        // Unsubscribe from NetworkList events
+        // NetworkList events
         if (playerDataNetworkList != null)
             playerDataNetworkList.OnListChanged -= PlayerDataNetworkList_OnListChanged;
 
 
-        // Null out static instance
         Instance = null;
     }
 

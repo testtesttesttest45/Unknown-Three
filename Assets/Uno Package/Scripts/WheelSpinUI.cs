@@ -57,7 +57,11 @@ public class WheelSpinUI : MonoBehaviour
     }
 
     public void Show() => gameObject.SetActive(true);
-    public void Hide() => gameObject.SetActive(false);
+    public void Hide()
+    {
+        StopLocalWinFX();
+        gameObject.SetActive(false);
+    }
 
     public void SetPocket(int index, Sprite avatarSprite, string label)
     {
@@ -129,9 +133,15 @@ public class WheelSpinUI : MonoBehaviour
     public void PlayLocalWinFX()
     {
         if (myWinConfetti == null) return;
-        Debug.Log("[WheelSpinUI] Playing local win confetti FX");
         myWinConfetti.gameObject.SetActive(true);
         myWinConfetti.Play();
         CardGameManager.PlaySound(GamePlayManager.instance.uno_btn_clip);
+    }
+
+    public void StopLocalWinFX()
+    {
+        if (myWinConfetti == null) return;
+        myWinConfetti.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        myWinConfetti.gameObject.SetActive(false);
     }
 }
