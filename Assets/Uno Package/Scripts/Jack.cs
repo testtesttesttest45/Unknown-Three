@@ -106,7 +106,7 @@ public class Jack : NetworkBehaviour
     {
         if (gpm.turnTimeoutCoroutine != null)
         {
-            StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
             gpm.turnTimeoutCoroutine = null;
         }
         gpm.FreezeTimerUI();
@@ -317,7 +317,7 @@ public class Jack : NetworkBehaviour
     {
         if (gpm.turnTimeoutCoroutine != null)
         {
-            StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
             gpm.turnTimeoutCoroutine = null;
         }
         gpm.FreezeTimerUI();
@@ -406,7 +406,7 @@ public class Jack : NetworkBehaviour
         gpm.FreezeTimerUI();
         if (gpm.turnTimeoutCoroutine != null)
         {
-            StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
             gpm.turnTimeoutCoroutine = null;
         }
 
@@ -505,7 +505,7 @@ public class Jack : NetworkBehaviour
         gpm.FreezeTimerUI();
         if (gpm.turnTimeoutCoroutine != null)
         {
-            StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
             gpm.turnTimeoutCoroutine = null;
         }
 

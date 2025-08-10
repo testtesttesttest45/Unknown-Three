@@ -465,21 +465,21 @@ public class MultiplayerManager : NetworkBehaviour
         }
 
         int totalPlayers = playerDataNetworkList.Count;
-        bool validPlayerCount = (totalPlayers == 4);
+        bool validPlayerCount = (totalPlayers == MAX_PLAYER_AMOUNT);
 
         if (allReady && validPlayerCount)
         {
             LobbyManager.Instance?.DeleteLobby();
-
             NetworkManager.Singleton.SceneManager.LoadScene("CardGameScene", LoadSceneMode.Single);
         }
         else if (allReady && !validPlayerCount)
         {
-            Debug.LogWarning($"Cannot start: Only {totalPlayers} player(s) ready! Game only supports 1v1 or 2v2");
+            Debug.LogWarning($"Cannot start: {totalPlayers} player(s) in lobby. Need exactly {MAX_PLAYER_AMOUNT}.");
         }
 
         TryStartGameIfReady();
     }
+
 
     public static class TeamUtils
     {
@@ -527,7 +527,7 @@ public class MultiplayerManager : NetworkBehaviour
         }
 
         int totalPlayers = playerDataNetworkList.Count;
-        bool validPlayerCount = (totalPlayers == 2 || totalPlayers == 4);
+        bool validPlayerCount = (totalPlayers == MAX_PLAYER_AMOUNT);
 
         if (allReady && validPlayerCount)
         {
@@ -535,6 +535,7 @@ public class MultiplayerManager : NetworkBehaviour
             NetworkManager.Singleton.SceneManager.LoadScene("CardGameScene", LoadSceneMode.Single);
         }
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     public void TogglePlayerReadyServerRpc(ServerRpcParams rpcParams = default)

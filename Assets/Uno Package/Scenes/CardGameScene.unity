@@ -5930,7 +5930,7 @@ MonoBehaviour:
   wildCardParticle: {fileID: 1408218706}
   menuButton: {fileID: 525378197}
   previousPlayerIndex: -1
-  isGoldenJackRevealPhase: 0
+  peekTime: 6
   wasteInteractionStarted: 0
   players:
   - {fileID: 858389341}
@@ -8782,6 +8782,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fb0022d29468d744a7dbcec0cb8c02b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isJackRevealPhase: 0
   isGoldenJackRevealPhase: 0
 --- !u!1 &517660851
 GameObject:

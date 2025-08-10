@@ -27,6 +27,14 @@ public class CardGameScene : MonoBehaviour
     {
         while (MultiplayerManager.Instance == null || MultiplayerManager.Instance.playerDataNetworkList == null)
             yield return null;
+
+        // If a client re-enters the game scene after Game Over, bounce them home.
+        if (GamePlayManager.GameHasEnded)
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScene");
+            yield break;
+        }
+
         while (MultiplayerManager.Instance.playerDataNetworkList.Count < 4)
             yield return null;
         yield return null;
@@ -36,12 +44,8 @@ public class CardGameScene : MonoBehaviour
             GamePlayManager.instance.SetupNetworkedPlayerSeats();
             GamePlayManager.instance.StartMultiplayerGame();
         }
-        else
-        {
-            // GamePlayManager.instance.SetupGame();
-        }
-
     }
+
 
     void Update()
     {
@@ -105,6 +109,7 @@ public class CardGameScene : MonoBehaviour
         }
 
         if (GamePlayManager.instance != null)
+            GamePlayManager.ResetGameHasEnded();
             GamePlayManager.instance.Cleanup();
         GamePlayManager.instance = null;
         instance = null;

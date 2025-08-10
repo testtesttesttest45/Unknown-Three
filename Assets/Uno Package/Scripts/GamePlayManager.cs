@@ -116,6 +116,13 @@ public class GamePlayManager : NetworkBehaviour
     private CardValue currentPowerValue = 0;
     private Coroutine safetyEndCoroutine;
 
+    public static bool GameHasEnded { get; private set; } = false;
+    public static void ResetGameHasEnded()
+    {
+        GameHasEnded = false;
+    }
+
+
     public CardType CurrentType
     {
         get { return _currentType; }
@@ -230,6 +237,7 @@ public class GamePlayManager : NetworkBehaviour
 
     public void StartMultiplayerGame()
     {
+        if (GameHasEnded) return;
         menuButton.SetActive(true);
         if (cardDeckTransform != null)
             cardDeckTransform.gameObject.SetActive(true);
@@ -340,25 +348,67 @@ public class GamePlayManager : NetworkBehaviour
 
         int winnerGlobalSeat = Random.Range(0, pCount);
 
-        List<int> candidatePockets = new List<int>();
-        for (int i = 0; i < 8; i++) if (i % pCount == winnerGlobalSeat) candidatePockets.Add(i);
-        int pocketIndex = candidatePockets[Random.Range(0, candidatePockets.Count)];
+        // pick pocket index that maps to winner
+        List<int> candidatePockets = new List<int>(8);
+        for (int i = 0; i < 8; i++)
+            if (i % pCount == winnerGlobalSeat) candidatePockets.Add(i);
+
+        int spinSeed = Random.Range(int.MinValue / 2, int.MaxValue / 2);
+        int chosenPocketIndex = candidatePockets[Mathf.Abs(spinSeed) % candidatePockets.Count];
+
+        int extraSpins = Random.Range(3, 5);
 
         float slice = 360f / 8f;
-        float pocketCenterZ = pocketIndex * slice;
-        int extraSpins = Random.Range(3, 5);
-        float targetZ = extraSpins * 360f + pocketCenterZ;
+        float pocketCenter = chosenPocketIndex * slice;
+        float finalZ = wheelUI.pointerOffsetDegrees + pocketCenter + extraSpins * 360f;
 
         pendingStartGlobalIndex = winnerGlobalSeat;
 
-        SpinWheelClientRpc(targetZ, wheelSpinDuration, winnerGlobalSeat);
+        // send the absolute final angle, no client-side math
+        SpinWheelAbsoluteClientRpc(winnerGlobalSeat, finalZ, wheelSpinDuration);
 
         StartCoroutine(HostAfterWheelRoutine(wheelSpinDuration, winnerGlobalSeat));
     }
 
+    private Coroutine _wheelSpinRoutine;
+
+    [ClientRpc]
+    void SpinWheelAbsoluteClientRpc(int winnerGlobalSeat, float finalZ, float duration)
+    {
+        if (wheelUI == null) return;
+        if (_wheelSpinRoutine != null) { StopCoroutine(_wheelSpinRoutine); _wheelSpinRoutine = null; }
+        _wheelSpinRoutine = StartCoroutine(SpinWheelToAngle(finalZ, duration));
+    }
+
+    [ClientRpc]
+    void HideWheelClientRpc()
+    {
+        if (_wheelSpinRoutine != null) { StopCoroutine(_wheelSpinRoutine); _wheelSpinRoutine = null; }
+        if (wheelUI != null)
+        {
+            wheelUI.OnPocketTick = null; // clear callback to be safe
+            wheelUI.Hide();
+        }
+    }
+
+    IEnumerator SpinWheelToAngle(float finalZ, float duration)
+    {
+        if (!wheelUI.gameObject.activeInHierarchy) wheelUI.Show();
+        yield return null;
+
+        wheelUI.OnPocketTick = () =>
+        {
+            CardGameManager.PlaySound(GamePlayManager.instance.throw_card_clip);
+        };
+
+        // one tween to the authoritative final angle
+        yield return wheelUI.SpinTo(finalZ, duration);
+    }
+
+
     private IEnumerator HostAfterWheelRoutine(float delay, int winnerGlobalSeat)
     {
-        yield return new WaitForSeconds(delay);
+        yield return new WaitForSeconds(delay + 0.05f);
         AnnounceWheelWinnerClientRpc(winnerGlobalSeat);
         yield return new WaitForSeconds(2f);
         HideWheelClientRpc();
@@ -371,32 +421,24 @@ public class GamePlayManager : NetworkBehaviour
     }
 
     [ClientRpc]
-    void SpinWheelClientRpc(float targetZ, float duration, int winnerGlobalSeat)
+    void SpinWheelClientRpc(int winnerGlobalSeat, int winnerPocketIndex, int extraSpins, float duration)
     {
         if (wheelUI == null) return;
-        StartCoroutine(SpinWheelSafe(targetZ, duration));
+        StartCoroutine(SpinWheelPreAligned(winnerPocketIndex, extraSpins, duration));
     }
 
-    IEnumerator SpinWheelSafe(float targetZ, float duration)
+    IEnumerator SpinWheelPreAligned(int winnerPocketIndex, int extraSpins, float duration)
     {
-        if (wheelUI == null) yield break;
+        if (!wheelUI.gameObject.activeInHierarchy) wheelUI.Show();
+        yield return null;
 
-        if (!wheelUI.gameObject.activeInHierarchy)
-            wheelUI.Show();
+        float slice = 360f / 8f;
+        float pocketCenter = winnerPocketIndex * slice;
 
-        float wait = 0f;
-        while (wheelUI != null && !wheelUI.gameObject.activeInHierarchy && wait < 1f)
-        {
-            wait += Time.unscaledDeltaTime;
-            yield return null; // next frame
-        }
+        float finalZ = wheelUI.pointerOffsetDegrees + pocketCenter + extraSpins * 360f;
 
-        if (wheelUI == null || !wheelUI.gameObject.activeInHierarchy)
-            yield break;
-
-        wheelUI.OnPocketTick = () => { CardGameManager.PlaySound(throw_card_clip); };
-
-        yield return StartCoroutine(wheelUI.SpinTo(targetZ, duration));
+        wheelUI.OnPocketTick = () => { CardGameManager.PlaySound(GamePlayManager.instance.throw_card_clip); };
+        yield return wheelUI.SpinTo(finalZ, duration);
     }
 
     [ClientRpc]
@@ -422,12 +464,6 @@ public class GamePlayManager : NetworkBehaviour
         {
             wheelUI.PlayLocalWinFX();
         }
-    }
-
-    [ClientRpc]
-    void HideWheelClientRpc()
-    {
-        if (wheelUI != null) wheelUI.Hide();
     }
 
     void BuildWheelVisualsLocal()
@@ -2019,6 +2055,7 @@ public class GamePlayManager : NetworkBehaviour
     public void SetupGameOver()
     {
         gameOver = true;
+        SetGameHasEndedClientRpc();
         for (int i = players.Count - 1; i >= 0; i--)
         {
             if (!players[i].isInRoom)
@@ -2070,6 +2107,13 @@ public class GamePlayManager : NetworkBehaviour
         if (winnerUI != null)
             winnerUI.ShowWinnersFromNetwork(results);
     }
+
+    [ClientRpc]
+    private void SetGameHasEndedClientRpc()
+    {
+        GameHasEnded = true;
+    }
+
 
     [ClientRpc]
     void ShowGameOverClientRpc()
