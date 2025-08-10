@@ -17,13 +17,38 @@ public class HomeScene : MonoBehaviour
     public InputField playerNameInput;
     private int tempAvatarIndex;
     private string tempPlayerName;
+    public GameObject illegalEdition;
+    [Header("Tutorial")]
+    public Button tutorialButton;
+    public GameObject tutorialPanel;
+    public Image tutorialImageDisplay; 
+    public Sprite[] tutorialImages;
+    public Button nextButton; 
+    public Button prevButton;
+    public Button closeTutorialButton;
 
+    private int currentTutorialIndex = 0;
     private List<Toggle> toggleList;
 
     void Start()
     {
         Time.timeScale = 1f;
         SetupUI();
+
+        if (tutorialButton != null)
+            tutorialButton.onClick.AddListener(OpenTutorial);
+
+        if (nextButton != null)
+            nextButton.onClick.AddListener(NextTutorial);
+
+        if (prevButton != null)
+            prevButton.onClick.AddListener(PrevTutorial);
+
+        if (closeTutorialButton != null)
+            closeTutorialButton.onClick.AddListener(CloseTutorial);
+
+        if (tutorialPanel != null)
+            tutorialPanel.SetActive(false);
 
         if (string.IsNullOrEmpty(CardGameManager.PlayerAvatarName))
         {
@@ -34,6 +59,52 @@ public class HomeScene : MonoBehaviour
             UpdateUI();
         }
     }
+
+    private void OpenTutorial()
+    {
+        if (tutorialImages == null || tutorialImages.Length == 0) return;
+
+        currentTutorialIndex = 0;
+        tutorialPanel.SetActive(true);
+        UpdateTutorialImage();
+    }
+
+    private void CloseTutorial()
+    {
+        tutorialPanel.SetActive(false);
+    }
+
+    private void NextTutorial()
+    {
+        if (tutorialImages == null) return;
+
+        currentTutorialIndex++;
+        if (currentTutorialIndex >= tutorialImages.Length)
+            currentTutorialIndex = tutorialImages.Length - 1;
+
+        UpdateTutorialImage();
+    }
+
+    private void PrevTutorial()
+    {
+        if (tutorialImages == null) return;
+
+        currentTutorialIndex--;
+        if (currentTutorialIndex < 0)
+            currentTutorialIndex = 0;
+
+        UpdateTutorialImage();
+    }
+
+    private void UpdateTutorialImage()
+    {
+        if (tutorialImageDisplay != null && tutorialImages.Length > 0)
+            tutorialImageDisplay.sprite = tutorialImages[currentTutorialIndex];
+
+        if (prevButton != null) prevButton.interactable = (currentTutorialIndex > 0);
+        if (nextButton != null) nextButton.interactable = (currentTutorialIndex < tutorialImages.Length - 1);
+    }
+
 
 
     void SetupUI()
@@ -85,6 +156,10 @@ public class HomeScene : MonoBehaviour
     public void ShowProfileChooser()
     {
         avatarSetting.SetActive(true);
+        if (illegalEdition != null)
+        {
+            illegalEdition.SetActive(false);
+        }
 
         tempAvatarIndex = CardGameManager.PlayerAvatarIndex;
         tempPlayerName = CardGameManager.PlayerAvatarName;
@@ -111,6 +186,10 @@ public class HomeScene : MonoBehaviour
         CardGameManager.PlayerAvatarIndex = tempAvatarIndex;
 
         avatarSetting.SetActive(false);
+        if (illegalEdition != null)
+        {
+            illegalEdition.SetActive(true);
+        }
         UpdateUI();
         CardGameManager.PlayButton();
     }
@@ -119,6 +198,10 @@ public class HomeScene : MonoBehaviour
     public void Cancel()
     {
         avatarSetting.SetActive(false);
+        if (illegalEdition != null)
+        {
+            illegalEdition.SetActive(true);
+        }
         UpdateUI();
         CardGameManager.PlayButton();
     }
