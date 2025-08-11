@@ -10,8 +10,6 @@ public class Jack : NetworkBehaviour
     public bool isJackRevealPhase = false;
     public bool isGoldenJackRevealPhase = false;
 
-    private ulong currentJackUserClientId = ulong.MaxValue;
-    private bool currentJackUserIsBot = false;
     private bool botGoldenJackRevealActive = false;
     private bool botJackRevealActive = false;
 
@@ -277,8 +275,6 @@ public class Jack : NetworkBehaviour
         if (IsHost)
             StartCoroutine(gpm.DelayedNextPlayerTurn(1.0f));
 
-        currentJackUserClientId = ulong.MaxValue;
-        currentJackUserIsBot = false;
     }
 
     // reveal all (GOlden Jack)

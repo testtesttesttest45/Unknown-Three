@@ -299,7 +299,7 @@ public class King : NetworkBehaviour
         if (gpm.draw_card_clip != null && gpm._audioSource != null)
             gpm._audioSource.PlayOneShot(gpm.draw_card_clip, 0.9f);
 
-        gpm.UpdateDeckVisualClientRpc(newDeck);
+        gpm.UpdateDeckVisualLocal(newDeck);
     }
 
     private static IEnumerator KingAnimateDeckToHandSlotAndInsert(

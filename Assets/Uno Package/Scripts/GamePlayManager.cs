@@ -80,7 +80,6 @@ public class GamePlayManager : NetworkBehaviour
     public WinnerUI winnerUI;
     public TMPro.TextMeshProUGUI remainingCardsCounterText;
     private bool turnEndedByTimeout = false;
-    private bool lastTurnEndedByTimeout = false;
 
     [Header("Lucky Wheel")]
     public WheelSpinUI wheelUI;
@@ -123,6 +122,7 @@ public class GamePlayManager : NetworkBehaviour
     private bool loadingShown = false;
     private System.DateTime? _hostPausedAtUtc;
     [SerializeField] private float hostAwayAssumeDeadSeconds = 20f;
+    private bool _serverTurnResolved = false;
 
     public static bool GameHasEnded { get; private set; } = false;
     public static void ResetGameHasEnded()
@@ -198,10 +198,6 @@ public class GamePlayManager : NetworkBehaviour
     [SerializeField] CardValue _currentValue;
 
     public static GamePlayManager instance;
-
-    System.DateTime pauseTime;
-    int fastForwardTime = 0;
-    bool setup = false, multiplayerLoaded = false, gameOver = false;
 
 
     void Start()
@@ -783,9 +779,7 @@ public class GamePlayManager : NetworkBehaviour
 
         List<CardValue> allValues = new List<CardValue>
         {
-            CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four,
-            CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine,
-            CardValue.Ten, CardValue.Jack, CardValue.Queen, CardValue.King,CardValue.Fiend, CardValue.Skip
+              CardValue.One, CardValue.Two, CardValue.Eight, CardValue.Jack,CardValue.King,CardValue.Fiend
         };
 
         // purple only have King, Queen, Jack
@@ -975,9 +969,25 @@ public class GamePlayManager : NetworkBehaviour
         currentPlayerIndex = Mod(currentPlayerIndex + step, players.Count);
     }
 
+    private bool TryResolveTurnOnce(ulong actorClientId)
+    {
+        if (!IsServer) return false;
+
+        // must be current player's turn
+        int currentGlobalSeat = GetGlobalIndexFromLocal(currentPlayerIndex);
+        ulong expectedClientId = seatOrderGlobal[currentGlobalSeat];
+        if (actorClientId != expectedClientId) return false;
+
+        if (_serverTurnResolved) return false;  // already handled
+        _serverTurnResolved = true;
+        return true;
+    }
+
+
     [ClientRpc]
     public void StartPlayerTurnForAllClientRpc(int globalPlayerIndex)
     {
+        if (IsServer) _serverTurnResolved = false;
         if (Fiend.Instance != null)
             Fiend.Instance.HideFiendPopup();
         foreach (var p in players)
@@ -1067,6 +1077,7 @@ public class GamePlayManager : NetworkBehaviour
     public void RequestWasteCardSwapServerRpc(int handIndex, SerializableCard newCard, SerializableCard replacedCard, ServerRpcParams rpcParams = default)
     {
         ulong clientId = rpcParams.Receive.SenderClientId;
+        if (!TryResolveTurnOnce(clientId)) return;
         int playerIndex = GetPlayerIndexFromClientId(clientId);
         Debug.Log($"[WasteCardSwap] ServerRpc called by clientId={clientId}, playerIndex={playerIndex} (should be bot), handIndex={handIndex}");
         if (turnTimeoutCoroutine != null)
@@ -1265,73 +1276,63 @@ public class GamePlayManager : NetworkBehaviour
 
     private void DoDeckReplaceForBot(int botLocalIndex, int handIndex)
     {
-        int playerIndex = botLocalIndex;
+        int globalIndex = GetGlobalIndexFromLocal(botLocalIndex);
+
+        // Clear any bot peek entry
+        ulong botClientId = GetClientIdFromGlobalSeat(globalIndex);
+        peekedCardsByClientId.Remove(botClientId);
+
         if (cards.Count == 0) return;
 
-        // Draw the top card
         SerializableCard drawn = cards[cards.Count - 1];
         cards.RemoveAt(cards.Count - 1);
         UpdateRemainingCardsCounter();
 
-        Player2 p = players[playerIndex];
+        Player2 p = players[botLocalIndex]; // local index still correct for accessing local UI
         Card replacedCard = p.cardsPanel.cards[handIndex];
         SerializableCard replacedSer = new SerializableCard(replacedCard.Type, replacedCard.Value);
 
         wasteCards.Add(replacedSer);
 
+        // PASS GLOBAL INDEX HERE
         ReplaceHandCardClientRpc(
-            playerIndex, handIndex, drawn, replacedSer,
+            globalIndex, handIndex, drawn, replacedSer,
             cards.ToArray(), wasteCards.ToArray(), false
         );
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
+
+        if (turnTimeoutCoroutine != null) { StopCoroutine(turnTimeoutCoroutine); turnTimeoutCoroutine = null; }
         FreezeTimerUI();
         StartCoroutine(WaitThenAdvanceBotTurn());
+    }
+
+    private void DoWasteCardSwapForBot(int botLocalIndex, int handIndex, SerializableCard newCard, SerializableCard replacedCard)
+    {
+        int globalIndex = GetGlobalIndexFromLocal(botLocalIndex);
+
+        wasteCards.Add(replacedCard);
+
+        ReplaceHandCardClientRpc(
+            globalIndex, handIndex, newCard, replacedCard,
+            cards.ToArray(), wasteCards.ToArray(), true
+        );
+
+        if (turnTimeoutCoroutine != null) { StopCoroutine(turnTimeoutCoroutine); turnTimeoutCoroutine = null; }
+        FreezeTimerUI();
+        StartCoroutine(WaitThenAdvanceBotTurn());
+
+        RemoveTopWasteCardClientRpc();
+
+        ulong botClientId = GetClientIdFromGlobalSeat(globalIndex);
+        peekedCardsByClientId.Remove(botClientId);
+        hasPeekedCard = false;
+        peekedCard = null;
+        wasteInteractionStarted = false;
     }
 
     private IEnumerator WaitThenAdvanceBotTurn()
     {
         yield return new WaitForSeconds(2.0f);
         EndTurnAndGoNextPlayer();
-    }
-
-
-    // host-only, no ServerRpc!
-    private void DoWasteCardSwapForBot(int botLocalIndex, int handIndex, SerializableCard newCard, SerializableCard replacedCard)
-    {
-        int playerIndex = botLocalIndex;
-
-        wasteCards.Add(replacedCard);
-
-        ReplaceHandCardClientRpc(
-            playerIndex,
-            handIndex,
-            newCard,
-            replacedCard,
-            cards.ToArray(),
-            wasteCards.ToArray(),
-            true
-        );
-
-        if (turnTimeoutCoroutine != null)
-        {
-            StopCoroutine(turnTimeoutCoroutine);
-            turnTimeoutCoroutine = null;
-        }
-        FreezeTimerUI();
-        StartCoroutine(WaitThenAdvanceBotTurn());
-
-        RemoveTopWasteCardClientRpc();
-
-        int botGlobalSeat = GetGlobalIndexFromLocal(playerIndex);
-        ulong botClientId = GetClientIdFromGlobalSeat(botGlobalSeat);
-        peekedCardsByClientId.Remove(botClientId);
-        hasPeekedCard = false;
-        peekedCard = null;
-        wasteInteractionStarted = false;
     }
 
     public ulong GetClientIdFromGlobalSeat(int globalSeat)
@@ -1451,8 +1452,7 @@ public class GamePlayManager : NetworkBehaviour
         }
     }
 
-    [ClientRpc]
-    public void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
+    public void UpdateDeckVisualLocal(SerializableCard[] deckCards)
     {
         for (int i = cardDeckTransform.childCount - 1; i >= 0; i--)
             Destroy(cardDeckTransform.GetChild(i).gameObject);
@@ -1468,18 +1468,20 @@ public class GamePlayManager : NetworkBehaviour
             card.Value = sc.Value;
             card.CalcPoint();
             card.name = $"{sc.Type}_{sc.Value}";
-
-            card.transform.localPosition = new Vector3(
-                Random.Range(-2f, 2f),
-                0,
-                -i * 1.15f
-            );
+            card.transform.localPosition = new Vector3(Random.Range(-2f, 2f), 0, -i * 1.15f);
         }
 
         UpdateDeckClickability();
         UpdateRemainingCardsCounter();
     }
 
+    [ClientRpc]
+    public void UpdateDeckVisualClientRpc(SerializableCard[] deckCards)
+    {
+        UpdateDeckVisualLocal(deckCards);
+    }
+
+    
     public void OnDeckClickedByPlayer()
     {
         if (isKingRefillPhase) return;
@@ -1560,6 +1562,7 @@ public class GamePlayManager : NetworkBehaviour
     public void OnDiscardClicked()
     {
         if (!hasPeekedCard || peekedCard == null) return;
+        if (!unoBtn.GetComponent<Button>().interactable) return;
 
         deckInteractionLocked = true;
         arrowObject.SetActive(false);
@@ -1587,6 +1590,10 @@ public class GamePlayManager : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void DiscardPeekedCardServerRpc(int cardType, int cardValue, ServerRpcParams rpcParams = default)
     {
+        if (rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId) return;
+        if (!TryResolveTurnOnce(seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)])) return;
+        var currentTurnClientId = seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)];
+        peekedCardsByClientId.Remove(currentTurnClientId);
         if (cards.Count == 0) return;
 
         SerializableCard topCard = cards[cards.Count - 1];
@@ -1630,7 +1637,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void DiscardPeekedCardClientRpc(int cardType, int cardValue, SerializableCard[] deckCards)
     {
-        UpdateDeckVisualClientRpc(deckCards);
+        UpdateDeckVisualLocal(deckCards);
         if (peekedCard != null)
         {
             Destroy(peekedCard.gameObject);
@@ -1649,6 +1656,8 @@ public class GamePlayManager : NetworkBehaviour
             ? rpcParams.Receive.SenderClientId
             : actorClientId;
         int playerIndex = GetPlayerIndexFromClientId(senderClientId);
+        if (!TryResolveTurnOnce(senderClientId)) return;
+        peekedCardsByClientId.Remove(senderClientId);
 
 
         if (playerIndex < 0 || cards.Count == 0)
@@ -1919,7 +1928,7 @@ public class GamePlayManager : NetworkBehaviour
 
         float randomRot = Random.Range(-50, 50f);
         StartCoroutine(AnimateCardMove(wasteObj, cardDeckTransform.position, cardWastePile.transform.position, 0.3f, randomRot));
-        UpdateDeckVisualClientRpc(deck);
+        UpdateDeckVisualLocal(deck);
         OnUnoClick();
     }
 
@@ -1969,6 +1978,8 @@ public class GamePlayManager : NetworkBehaviour
     public void OnHandCardReplaceRequested(int handIndex)
     {
         if (isKingRefillPhase) return;
+        if (!hasPeekedCard || deckInteractionLocked) return;
+        deckInteractionLocked = true;
         RequestReplaceHandCardServerRpc(handIndex);
     }
 
@@ -1984,6 +1995,8 @@ public class GamePlayManager : NetworkBehaviour
         FreezeTimerUI();
 
         ulong senderClientId = rpcParams.Receive.SenderClientId;
+        if (!TryResolveTurnOnce(senderClientId)) return;
+        peekedCardsByClientId.Remove(senderClientId);
         int playerIndex = GetPlayerIndexFromClientId(senderClientId);
         if (playerIndex < 0 || playerIndex >= players.Count) return;
         if (cards.Count == 0) return;
@@ -2059,7 +2072,7 @@ public class GamePlayManager : NetworkBehaviour
         else newCardVisual.IsOpen = p.isUserPlayer;
         newCardVisual.CalcPoint();
 
-        UpdateDeckVisualClientRpc(deck);
+        UpdateDeckVisualLocal(deck);
 
         float animDuration = fromWastePile ? 0.8f : 0.5f;
 
@@ -2187,7 +2200,6 @@ public class GamePlayManager : NetworkBehaviour
 
     public void SetupGameOver()
     {
-        gameOver = true;
         SetGameHasEndedClientRpc();
         for (int i = players.Count - 1; i >= 0; i--)
         {
@@ -2305,7 +2317,7 @@ public class GamePlayManager : NetworkBehaviour
 
     private bool IsSpecialCard(CardValue value)
     {
-        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend;
+        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend || value == CardValue.GoldenJack;
     }
 
     private bool ShouldShowWasteArrow()

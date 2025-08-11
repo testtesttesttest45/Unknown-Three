@@ -9,15 +9,15 @@ EditorBuildSettings:
     path: Assets/Uno Package/Scenes/HomeScene.unity
     guid: 88ba4069ceb22094cb4641dcfbc7b904
   - enabled: 1
-    path: Assets/Uno Package/Scenes/LobbyScene.unity
-    guid: 2db6d82244b549b43a11236a066ead09
-  - enabled: 1
-    path: Assets/Uno Package/Scenes/CardGameScene.unity
-    guid: 7c481906b37abe244b4399a30fb814a8
-  - enabled: 1
     path: Assets/Uno Package/Scenes/LoadingScene.unity
     guid: c5c4be59e28ea4048bd1ff9e48a179b0
   - enabled: 1
-    path: Assets/Uno Package/Scenes/CharacterSelectScene.unity
+    path: Assets/Uno Package/Scenes/LobbyScene.unity
+    guid: 2db6d82244b549b43a11236a066ead09
+  - enabled: 1
+    path: Assets/Uno Package/Scenes/InLobbyScene.unity
     guid: ef11a265631e36c42a4f15c9b9aa6bc3
+  - enabled: 1
+    path: Assets/Uno Package/Scenes/CardGameScene.unity
+    guid: 7c481906b37abe244b4399a30fb814a8
   m_configObjects: {}

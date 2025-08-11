@@ -6,8 +6,6 @@ using Unity.Services.Authentication;
 using Unity.Services.Lobbies;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
-using WebSocketSharp;
 
 public class MultiplayerManager : NetworkBehaviour
 {
@@ -184,7 +182,7 @@ public class MultiplayerManager : NetworkBehaviour
 
     private void NetworkManager_ConnectionApprovalCallback(NetworkManager.ConnectionApprovalRequest connectionApprovalRequest, NetworkManager.ConnectionApprovalResponse connectionApprovalResponse)
     {
-        if (SceneManager.GetActiveScene().name != Loader.Scene.CharacterSelectScene.ToString())
+        if (SceneManager.GetActiveScene().name != Loader.Scene.InLobbyScene.ToString())
         {
             connectionApprovalResponse.Approved = false;
             connectionApprovalResponse.Reason = "Game has already started";
