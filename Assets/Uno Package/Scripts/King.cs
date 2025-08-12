@@ -187,16 +187,9 @@ public class King : NetworkBehaviour
             if (killerGlobalSeat >= 0 && killerGlobalSeat < MultiplayerManager.Instance.playerDataNetworkList.Count)
                 killerClientId = MultiplayerManager.Instance.playerDataNetworkList[killerGlobalSeat].clientId;
 
-            if (killerLocalSeat >= 0 && killerLocalSeat < gpm.players.Count)
+            if (killerGlobalSeat >= 0 && Fiend.Instance != null)
             {
-                if (IsBotClientId(killerClientId))
-                {
-                    JumbleBotHandClientRpc(killerLocalSeat);
-                }
-                else
-                {
-                    JumbleOwnHandClientRpc(killerGlobalSeat);
-                }
+                Fiend.Instance.RequestJumbleHandServerRpc(killerGlobalSeat);
             }
         }
         else if (killedWasGoldenJack && isOpponent)

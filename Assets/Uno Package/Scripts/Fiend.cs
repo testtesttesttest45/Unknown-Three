@@ -29,7 +29,6 @@ public class Fiend : NetworkBehaviour
         if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
     }
 
-    // normal flow of Fiend
     public void ShowFiendPopup()
     {
         if (fiendPopup == null || avatarPanel == null || playerRowPrefab == null) return;
@@ -45,9 +44,7 @@ public class Fiend : NetworkBehaviour
         for (int globalSeat = 0; globalSeat < gpm.seatOrderGlobal.Count; globalSeat++)
         {
             ulong cid = gpm.seatOrderGlobal[globalSeat];
-
-            // Skip myself only
-            if (cid == myClientId) continue;
+            if (cid == myClientId) continue; // skip myself
 
             GameObject row = Instantiate(playerRowPrefab, avatarPanel);
 
@@ -60,11 +57,8 @@ public class Fiend : NetworkBehaviour
                 string label = p != null && !string.IsNullOrEmpty(p.playerName)
                     ? p.playerName
                     : TryGetNameFromPlayerData(cid) ?? $"Player {globalSeat + 1}";
+                if (!IsClientIdPresentInPlayerData(cid)) label += " (disconnected)";
                 nameText.text = label;
-
-                // append "disconnected" to the name
-                if (!IsClientIdPresentInPlayerData(cid))
-                    nameText.text += " (disconnected)";
             }
 
             var avatarImg = row.transform.Find("AvatarImage")?.GetComponent<Image>();
@@ -79,7 +73,21 @@ public class Fiend : NetworkBehaviour
             btn.onClick.RemoveAllListeners();
             btn.onClick.AddListener(() => OnOpponentSelected(capturedGlobalSeat));
         }
+    }
 
+    public void HideFiendPopup()
+    {
+        if (fiendPopup != null) fiendPopup.SetActive(false);
+    }
+
+    private void OnOpponentSelected(int targetGlobalSeat)
+    {
+        HideFiendPopup();
+
+        if (jumbleToggle != null && jumbleToggle.isOn)
+            RequestVisualJumbleHandServerRpc(targetGlobalSeat);
+        else
+            RequestJumbleHandServerRpc(targetGlobalSeat);
     }
 
     private bool IsClientIdPresentInPlayerData(ulong clientId)
@@ -99,31 +107,9 @@ public class Fiend : NetworkBehaviour
         return null;
     }
 
-
-    public void HideFiendPopup()
-    {
-        if (fiendPopup != null) fiendPopup.SetActive(false);
-    }
-
-    private void OnOpponentSelected(int targetGlobalSeat)
-    {
-        HideFiendPopup();
-
-        if (jumbleToggle != null && jumbleToggle.isOn)
-        {
-            // Visual-only jumble (no data change)
-            RequestVisualJumbleHandServerRpc(targetGlobalSeat);
-        }
-        else
-        {
-            // Real jumble (reorders hand)
-            RequestJumbleHandServerRpc(targetGlobalSeat);
-        }
-    }
-
-    // authoritative true jumble
+    // Server: authoritative jumble
     [ServerRpc(RequireOwnership = false)]
-    private void RequestJumbleHandServerRpc(int targetGlobalSeat, ServerRpcParams rpcParams = default)
+    public void RequestJumbleHandServerRpc(int targetGlobalSeat, ServerRpcParams rpcParams = default)
     {
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
 
@@ -136,19 +122,15 @@ public class Fiend : NetworkBehaviour
         gpm.FreezeTimerUI();
 
         int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
-        if (localSeat < 0 || localSeat >= gpm.players.Count) return;
+        if (localSeat < 0 || localSeat >= gpm.players.Count) { FinishPowerAndAdvanceTurn(); return; }
 
         var hand = gpm.players[localSeat].cardsPanel?.cards;
-        if (hand == null || hand.Count <= 1) 
-        {
-            FinishPowerAndAdvanceTurn();
-            return;
-        }
+        if (hand == null || hand.Count <= 1) { FinishPowerAndAdvanceTurn(); return; }
 
         int cardCount = hand.Count;
         List<int> indices = BuildRandomPermutation(cardCount);
 
-        // Broadcast to everybody to animate & apply final order
+        // Broadcast authoritative order to everyone
         JumbleHandClientRpc(targetGlobalSeat, indices.ToArray());
     }
 
@@ -156,7 +138,6 @@ public class Fiend : NetworkBehaviour
     private void JumbleHandClientRpc(int targetGlobalSeat, int[] newOrder)
     {
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
-
         gpm.FreezeTimerUI();
 
         int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
@@ -166,12 +147,11 @@ public class Fiend : NetworkBehaviour
         var hand = player.cardsPanel?.cards;
         if (hand == null || hand.Count == 0 || newOrder == null || newOrder.Length != hand.Count)
         {
-            // Fail-safe finish
             if (IsHost) FinishPowerAndAdvanceTurn();
             return;
         }
 
-        // Animate and then commit new order (updateCardData=true)
+        // Animate on a visual copy; commit using snapshot + newOrder
         player.StartCoroutine(JumbleHandAnimation(
             player, hand, newOrder, 3.0f, true,
             () =>
@@ -182,7 +162,7 @@ public class Fiend : NetworkBehaviour
         ));
     }
 
-    // fake jumble, visual only
+    // Server: visual-only jumble
     [ServerRpc(RequireOwnership = false)]
     private void RequestVisualJumbleHandServerRpc(int targetGlobalSeat, ServerRpcParams rpcParams = default)
     {
@@ -211,7 +191,6 @@ public class Fiend : NetworkBehaviour
     private void VisualJumbleHandClientRpc(int targetGlobalSeat, int[] newOrder)
     {
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
-
         gpm.FreezeTimerUI();
 
         int localSeat = gpm.GetLocalIndexFromGlobal(targetGlobalSeat);
@@ -225,11 +204,11 @@ public class Fiend : NetworkBehaviour
             return;
         }
 
-        // Animate only (updateCardData=false), then snap back to original layout
         player.StartCoroutine(JumbleHandAnimation(
             player, hand, newOrder, 3.0f, false,
             () =>
             {
+                // snap back to original layout
                 player.cardsPanel.UpdatePos();
                 if (IsHost)
                 {
@@ -240,7 +219,7 @@ public class Fiend : NetworkBehaviour
         ));
     }
 
-    // helpers
+    // synced Animation
     public IEnumerator JumbleHandAnimation(
         Player2 player,
         List<Card> hand,
@@ -249,26 +228,35 @@ public class Fiend : NetworkBehaviour
         bool updateCardData,
         System.Action onComplete)
     {
-        if (player == null || player.cardsPanel == null || hand == null || hand.Count == 0) yield break;
+        if (player == null || player.cardsPanel == null || hand == null || hand.Count == 0)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
 
-        float timer = 0f;
-        int cardCount = hand.Count;
+        var handSnapshot = new List<Card>(hand);
+        int cardCount = handSnapshot.Count;
 
         Vector3[] slotPositions = new Vector3[cardCount];
         for (int i = 0; i < cardCount; i++)
-            slotPositions[i] = hand[i].transform.localPosition;
+            slotPositions[i] = handSnapshot[i] != null
+                ? handSnapshot[i].transform.localPosition
+                : Vector3.zero;
 
-        List<Card> workingHand = updateCardData ? hand : new List<Card>(hand);
+        var visualOrder = new List<Card>(handSnapshot);
 
+        float timer = 0f;
         const float swapAnim = 0.18f;
         while (timer < durationSeconds && cardCount > 1)
         {
+            if (player.cardsPanel == null || player.cardsPanel.cards == null) break;
+
             int a = Random.Range(0, cardCount);
             int b; do { b = Random.Range(0, cardCount); } while (b == a);
 
-            var ca = workingHand[a];
-            var cb = workingHand[b];
-            if (ca == null || cb == null) { timer += swapAnim; continue; }
+            var ca = visualOrder[a];
+            var cb = visualOrder[b];
+            if (ca == null || cb == null) { timer += swapAnim; yield return null; continue; }
 
             Vector3 posA = ca.transform.localPosition;
             Vector3 posB = cb.transform.localPosition;
@@ -285,13 +273,11 @@ public class Fiend : NetworkBehaviour
             if (ca != null) ca.transform.localPosition = posB;
             if (cb != null) cb.transform.localPosition = posA;
 
-            var tmp = workingHand[a];
-            workingHand[a] = workingHand[b];
-            workingHand[b] = tmp;
+            var tmp = visualOrder[a];
+            visualOrder[a] = visualOrder[b];
+            visualOrder[b] = tmp;
 
-            if (swapCardClip != null && _audioSource != null)
-                _audioSource.PlayOneShot(swapCardClip);
-
+            TryPlaySwapSfx();
             timer += swapAnim;
         }
 
@@ -300,34 +286,59 @@ public class Fiend : NetworkBehaviour
         if (finalOrder == null || finalOrder.Length != cardCount)
         {
             for (int i = 0; i < cardCount; i++)
-                if (workingHand[i] != null)
-                    workingHand[i].transform.localPosition = slotPositions[i];
-
+            {
+                var c = handSnapshot[i];
+                if (c != null) c.transform.localPosition = slotPositions[i];
+            }
+            player.cardsPanel.UpdatePos();
             onComplete?.Invoke();
             yield break;
         }
 
-        var oldWorking = new List<Card>(workingHand);
-        var newHand = new List<Card>(cardCount);
+        var committed = new List<Card>(cardCount);
         for (int i = 0; i < finalOrder.Length; i++)
         {
-            int src = Mathf.Clamp(finalOrder[i], 0, oldWorking.Count - 1);
-            Card c = oldWorking[src];
-            newHand.Add(c);
-            if (c != null) c.transform.localPosition = slotPositions[i];
+            int src = Mathf.Clamp(finalOrder[i], 0, handSnapshot.Count - 1);
+            committed.Add(handSnapshot[src]);
         }
 
         if (updateCardData)
         {
             player.cardsPanel.cards.Clear();
-            player.cardsPanel.cards.AddRange(newHand);
+            player.cardsPanel.cards.AddRange(committed);
+
             for (int i = 0; i < player.cardsPanel.cards.Count; i++)
-                if (player.cardsPanel.cards[i] != null)
-                    player.cardsPanel.cards[i].cardIndex = i;
+            {
+                var c = player.cardsPanel.cards[i];
+                if (c != null)
+                {
+                    c.cardIndex = i;
+                    c.transform.localPosition = slotPositions[i];
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < cardCount; i++)
+            {
+                var c = handSnapshot[i];
+                if (c != null) c.transform.localPosition = slotPositions[i];
+            }
         }
 
         player.cardsPanel.UpdatePos();
         onComplete?.Invoke();
+    }
+
+    private void TryPlaySwapSfx()
+    {
+        if (swapCardClip == null) return;
+        if (_audioSource == null)
+        {
+            _audioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+            if (_audioSource == null) return;
+        }
+        _audioSource.PlayOneShot(swapCardClip);
     }
 
     // bot handling
@@ -339,7 +350,6 @@ public class Fiend : NetworkBehaviour
     private IEnumerator BotFiendJumbleRoutine(ulong botClientId)
     {
         yield return new WaitForSeconds(Random.Range(1f, 2f));
-
         if (gpm == null) yield break;
 
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
