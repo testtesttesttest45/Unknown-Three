@@ -9,6 +9,7 @@ public struct PlayerData : IEquatable<PlayerData>, INetworkSerializable
     public FixedString64Bytes playerId;
     public bool isReady;
     public int avatarIndex;
+    public bool isSuperbot;
 
     public bool Equals(PlayerData other)
     {
@@ -22,5 +23,6 @@ public struct PlayerData : IEquatable<PlayerData>, INetworkSerializable
         serializer.SerializeValue(ref playerId);
         serializer.SerializeValue(ref isReady);
         serializer.SerializeValue(ref avatarIndex);
+        serializer.SerializeValue(ref isSuperbot);
     }
 }

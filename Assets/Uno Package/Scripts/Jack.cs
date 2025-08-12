@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,11 +13,65 @@ public class Jack : NetworkBehaviour
     private bool botGoldenJackRevealActive = false;
     private bool botJackRevealActive = false;
 
+    private const float JACK_VO_LEN = 2f;
+    private const float GOLDEN_JACK_VO_LEN = 4f;
+    private const float REVEAL_LEN = 2f;
+    private const float EXPOSE_VO_LEN = 2f;
+
+    private float jackVoStartServerTime = -1f;
+    private float goldenVoStartServerTime = -1f;
+
+    private Coroutine _exposeGateCo;
+    private int _powerEpoch = 0;
+    private ulong _powerUserClientId = ulong.MaxValue;
+    private AudioSource _voChannel;
+
     private GamePlayManager gpm => GamePlayManager.instance;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        if (_voChannel == null)
+        {
+            _voChannel = gameObject.AddComponent<AudioSource>();
+            _voChannel.playOnAwake = false;
+            _voChannel.loop = false;
+        }
+    }
 
-    // reveal one hand card
+    public void MarkVoStart(CardValue v)
+    {
+        float t = Time.unscaledTime;
+        if (v == CardValue.Jack) jackVoStartServerTime = t;
+        else if (v == CardValue.GoldenJack) goldenVoStartServerTime = t;
+    }
+
+    private void CancelExposeGate()
+    {
+        if (_exposeGateCo != null)
+        {
+            StopCoroutine(_exposeGateCo);
+            _exposeGateCo = null;
+        }
+    }
+
+    private void StartExposeGate(ulong userId, float voLen, float voStartServerTime)
+    {
+        CancelExposeGate();
+        _powerUserClientId = userId;
+        int epoch = ++_powerEpoch;
+        _exposeGateCo = StartCoroutine(ExposeZeroAfterBothCoroutine(userId, voLen, voStartServerTime, epoch));
+    }
+
+    private IEnumerator StartExposeGateBlocking(ulong userId, float voLen, float voStartServerTime)
+    {
+        CancelExposeGate();
+        _powerUserClientId = userId;
+        int epoch = ++_powerEpoch;
+        _exposeGateCo = StartCoroutine(ExposeZeroAfterBothCoroutine(userId, voLen, voStartServerTime, epoch));
+        while (_exposeGateCo != null && epoch == _powerEpoch)
+            yield return null;
+    }
 
     void OnJackCardDiscardedByMe()
     {
@@ -97,19 +151,13 @@ public class Jack : NetworkBehaviour
         card.Value = value;
         card.IsOpen = true;
         card.FlashMarkedOutline();
-        StartCoroutine(HideCardAfterDelay(card, 2f));
-    }
-
-    [ClientRpc]
-    void PlayJackZeroBonusSoundClientRpc(ClientRpcParams rpcParams = default)
-    {
-        if (gpm._audioSource != null && gpm.jackSpecialVoiceClip != null)
-            gpm._audioSource.PlayOneShot(gpm.jackSpecialVoiceClip);
+        StartCoroutine(HideCardAfterDelay(card, REVEAL_LEN));
     }
 
     [ServerRpc(RequireOwnership = false)]
     void RequestRevealHandCardServerRpc(int playerIndex, int cardIndex, ServerRpcParams serverRpcParams = default)
     {
+        // Freeze timer immediately
         if (gpm.turnTimeoutCoroutine != null)
         {
             gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
@@ -130,13 +178,11 @@ public class Jack : NetworkBehaviour
         ulong jackUserClientId = serverRpcParams.Receive.SenderClientId;
         if (gpm.IsBotClientId(jackUserClientId))
         {
-            Debug.LogWarning("RequestRevealHandCardServerRpc called for bot—should be simulated path.");
             FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, true);
-            OnJackRevealDoneServerRpc();
+            StartExposeGate(jackUserClientId, JACK_VO_LEN, jackVoStartServerTime);
             return;
         }
 
-        // Reveal for Jack user only
         RevealHandCardClientRpc(
             playerIndex, cardIndex, handCard.Type, handCard.Value, jackUserClientId,
             new ClientRpcParams
@@ -144,24 +190,29 @@ public class Jack : NetworkBehaviour
                 Send = new ClientRpcSendParams { TargetClientIds = new[] { jackUserClientId } }
             });
 
-        // Others see a flash outline
         FlashMarkedOutlineClientRpc(playerIndex, cardIndex, jackUserClientId, false);
 
-        StartCoroutine(ExposeZeroAfterDelayCoroutine(jackUserClientId));
+        StartExposeGate(jackUserClientId, JACK_VO_LEN, jackVoStartServerTime);
     }
 
-    private IEnumerator ExposeZeroAfterDelayCoroutine(ulong jackUserClientId)
+    private IEnumerator ExposeZeroAfterBothCoroutine(ulong powerUserClientId, float voLen, float voStartServerTime, int epoch)
     {
-        yield return new WaitForSeconds(1.0f);
+        float voRemaining = (voStartServerTime < 0f)
+            ? voLen
+            : Mathf.Max(0f, (voStartServerTime + voLen) - Time.unscaledTime);
 
-        // Find the player (not Jack user) who has the Zero
+        float wait = Mathf.Max(voRemaining, REVEAL_LEN);
+        if (wait > 0f) yield return new WaitForSeconds(wait);
+
+        if (epoch != _powerEpoch) { _exposeGateCo = null; yield break; }
+
+        // Zero check (exclude power user)
         int zeroHolderPlayerIndex = -1;
         for (int pi = 0; pi < gpm.players.Count; pi++)
         {
             int globalSeat = gpm.GetGlobalIndexFromLocal(pi);
             ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
-            if (pClientId == ulong.MaxValue) continue;         // empty / disconnected seat
-            if (pClientId == jackUserClientId) continue;       // skip Jack user
+            if (pClientId == ulong.MaxValue || pClientId == powerUserClientId) continue;
 
             var panel = gpm.players[pi]?.cardsPanel;
             if (panel == null || panel.cards == null) continue;
@@ -169,51 +220,31 @@ public class Jack : NetworkBehaviour
             for (int ci = 0; ci < panel.cards.Count; ci++)
             {
                 var c = panel.cards[ci];
-                if (c == null) continue;
-                if (c.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    break;
-                }
+                if (c != null && c.Value == CardValue.Zero) { zeroHolderPlayerIndex = pi; break; }
             }
             if (zeroHolderPlayerIndex != -1) break;
         }
 
         if (zeroHolderPlayerIndex != -1)
         {
-            var allRealClientIds = gpm.GetAllHumanClientIds();
+            if (epoch != _powerEpoch) { _exposeGateCo = null; yield break; } // recheck before VO
 
+            var allRealClientIds = gpm.GetAllHumanClientIds();
             if (allRealClientIds.Count > 0)
             {
-                PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds }
-                });
+                StartExposeEffectClientRpc(
+                    gpm.GetGlobalIndexFromLocal(zeroHolderPlayerIndex),
+                    voLen,
+                    new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds } }
+                );
             }
+            yield return new WaitForSeconds(EXPOSE_VO_LEN);
 
-            ShowZeroHolderTimerEffectClientRpc(gpm.GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
+            if (epoch != _powerEpoch) { _exposeGateCo = null; yield break; }
         }
-        else
-        {
-            OnJackRevealDoneServerRpc();
-        }
-    }
 
-    [ClientRpc]
-    void ShowZeroHolderTimerEffectClientRpc(int globalPlayerIndex)
-    {
-        int localIndex = gpm.GetLocalIndexFromGlobal(globalPlayerIndex);
-        if (localIndex < 0 || localIndex >= gpm.players.Count) return;
-
-        var player = gpm.players[localIndex];
-        if (player?.timerOjbect != null)
-        {
-            player.timerOjbect.SetActive(true);
-            var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
-            if (img != null) img.color = Color.red;
-            StartCoroutine(RestoreTimerEffectAfterDelay(player, 3.0f));
-        }
+        _exposeGateCo = null;
+        OnJackRevealDoneServerRpc();
     }
 
     private IEnumerator RestoreTimerEffectAfterDelay(Player2 player, float delay)
@@ -227,16 +258,9 @@ public class Jack : NetworkBehaviour
         }
     }
 
-    private IEnumerator JackZeroBonusEndTurnCoroutine()
-    {
-        yield return new WaitForSeconds(3.0f);
-        OnJackRevealDoneServerRpc();
-    }
-
     [ClientRpc]
     void FlashMarkedOutlineClientRpc(int playerIndex, int cardIndex, ulong jackUserClientId, bool jackUserIsBot, ClientRpcParams rpcParams = default)
     {
-        // If Jack user is a human and this client IS the Jack user, skip the flash (they already saw the reveal)
         if (!jackUserIsBot && NetworkManager.Singleton.LocalClientId == jackUserClientId)
             return;
 
@@ -257,7 +281,12 @@ public class Jack : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void OnJackRevealDoneServerRpc(ServerRpcParams rpcParams = default)
     {
+        CancelExposeGate();
+        jackVoStartServerTime = -1f;
+        goldenVoStartServerTime = -1f;
+
         isJackRevealPhase = false;
+        isGoldenJackRevealPhase = false;
 
         if (gpm.currentPowerOwnerGlobalSeat >= 0)
         {
@@ -274,10 +303,7 @@ public class Jack : NetworkBehaviour
 
         if (IsHost)
             StartCoroutine(gpm.DelayedNextPlayerTurn(1.0f));
-
     }
-
-    // reveal all (GOlden Jack)
 
     [ClientRpc]
     public void StartGoldenJackRevealLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
@@ -330,6 +356,7 @@ public class Jack : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void RequestRevealAllHandCardsServerRpc(int playerIndex, ServerRpcParams serverRpcParams = default)
     {
+        // Freeze timer immediately
         if (gpm.turnTimeoutCoroutine != null)
         {
             gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
@@ -357,7 +384,6 @@ public class Jack : NetworkBehaviour
             revealInfos.Add(new CardRevealInfo { cardIndex = i, type = handCard.Type, value = handCard.Value });
         }
 
-        // Reveal to the Golden Jack user only
         RevealAllHandCardsClientRpc(
             playerIndex,
             revealInfos.ToArray(),
@@ -365,13 +391,12 @@ public class Jack : NetworkBehaviour
             new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { goldenJackUserClientId } } }
         );
 
-        // Others see flash
+        // Others see flash for all cards
         for (int i = 0; i < targetPlayer.cardsPanel.cards.Count; i++)
-        {
             FlashMarkedOutlineClientRpc(playerIndex, i, goldenJackUserClientId, false);
-        }
 
-        StartCoroutine(ExposeZeroAfterDelayCoroutine(goldenJackUserClientId));
+        // Gate expose golden jack VO (4s) AND reveals (2s)
+        StartExposeGate(goldenJackUserClientId, GOLDEN_JACK_VO_LEN, goldenVoStartServerTime);
     }
 
     [ClientRpc]
@@ -395,16 +420,65 @@ public class Jack : NetworkBehaviour
             card.Value = info.value;
             card.IsOpen = true;
             card.FlashMarkedOutline();
-            StartCoroutine(HideCardAfterDelay(card, 2f));
+            StartCoroutine(HideCardAfterDelay(card, REVEAL_LEN));
         }
     }
 
     // bot handling
+    public IEnumerator SimulateBotJackReveal(ulong botClientId)
+    {
+        if (botJackRevealActive) yield break;
+        botJackRevealActive = true;
+        isJackRevealPhase = true;
+
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
+
+        // pick target & flash one card ...
+        var validTargets = new List<int>();
+        for (int i = 0; i < gpm.players.Count; i++)
+        {
+            int globalSeat = gpm.GetGlobalIndexFromLocal(i);
+            ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
+            if (pClientId == ulong.MaxValue || pClientId == botClientId) continue;
+            var p = gpm.players[i];
+            if (p != null && p.isInRoom && p.cardsPanel?.cards != null && p.cardsPanel.cards.Count > 0)
+                validTargets.Add(i);
+        }
+        if (validTargets.Count == 0) { botJackRevealActive = false; isJackRevealPhase = false; yield break; }
+
+        int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
+        var tgtPanel = gpm.players[targetPlayerIndex]?.cardsPanel;
+        if (tgtPanel == null || tgtPanel.cards == null || tgtPanel.cards.Count == 0)
+        { botJackRevealActive = false; isJackRevealPhase = false; yield break; }
+
+        int targetCardIndex = Random.Range(0, tgtPanel.cards.Count);
+        var realClientIds = gpm.GetAllHumanClientIds();
+        FlashMarkedOutlineClientRpc(
+            gpm.GetGlobalIndexFromLocal(targetPlayerIndex),
+            targetCardIndex,
+            botClientId,
+            true, // bot
+            new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = realClientIds } }
+        );
+
+        gpm.FreezeTimerUI();
+        if (gpm.turnTimeoutCoroutine != null)
+        {
+            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
+            gpm.turnTimeoutCoroutine = null;
+        }
+
+        yield return StartExposeGateBlocking(botClientId, JACK_VO_LEN, jackVoStartServerTime);
+
+        botJackRevealActive = false;
+        isJackRevealPhase = false;
+    }
 
     public IEnumerator SimulateBotGoldenJackReveal(ulong botClientId)
     {
         if (botGoldenJackRevealActive) yield break;
         botGoldenJackRevealActive = true;
+        isGoldenJackRevealPhase = true;
 
         yield return new WaitForSeconds(Random.Range(1f, 2f));
 
@@ -413,19 +487,12 @@ public class Jack : NetworkBehaviour
         {
             int globalSeat = gpm.GetGlobalIndexFromLocal(i);
             ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
-            if (pClientId == ulong.MaxValue) continue; // empty / disconnected
-            if (pClientId == botClientId) continue;    // skip self
+            if (pClientId == ulong.MaxValue || pClientId == botClientId) continue;
             var p = gpm.players[i];
             if (p != null && p.isInRoom && p.cardsPanel?.cards != null && p.cardsPanel.cards.Count > 0)
                 validTargets.Add(i);
         }
-
-        if (validTargets.Count == 0)
-        {
-            Debug.LogWarning("[SimulateBotGoldenJackReveal] No valid target players!");
-            botGoldenJackRevealActive = false;
-            yield break;
-        }
+        if (validTargets.Count == 0) { botGoldenJackRevealActive = false; isGoldenJackRevealPhase = false; yield break; }
 
         int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
         var targetPlayer = gpm.players[targetPlayerIndex];
@@ -437,7 +504,7 @@ public class Jack : NetworkBehaviour
                 gpm.GetGlobalIndexFromLocal(targetPlayerIndex),
                 i,
                 botClientId,
-                false,
+                true,
                 new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = realClientIds } }
             );
         }
@@ -449,157 +516,63 @@ public class Jack : NetworkBehaviour
             gpm.turnTimeoutCoroutine = null;
         }
 
-        yield return new WaitForSeconds(1.0f);
-
-        int zeroHolderPlayerIndex = -1;
-        for (int pi = 0; pi < gpm.players.Count; pi++)
-        {
-            int globalSeat = gpm.GetGlobalIndexFromLocal(pi);
-            ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
-            if (pClientId == ulong.MaxValue) continue;
-            if (pClientId == botClientId) continue;
-
-            var panel = gpm.players[pi]?.cardsPanel;
-            if (panel == null || panel.cards == null) continue;
-
-            for (int ci = 0; ci < panel.cards.Count; ci++)
-            {
-                var c = panel.cards[ci];
-                if (c == null) continue;
-                if (c.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    break;
-                }
-            }
-            if (zeroHolderPlayerIndex != -1) break;
-        }
-
-        if (zeroHolderPlayerIndex != -1)
-        {
-            var allRealClientIds = gpm.GetAllHumanClientIds();
-            if (allRealClientIds.Count > 0)
-            {
-                PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds }
-                });
-            }
-
-            ShowZeroHolderTimerEffectClientRpc(gpm.GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
-        }
-        else
-        {
-            yield return new WaitForSeconds(1.0f);
-            OnJackRevealDoneServerRpc();
-        }
+        yield return StartExposeGateBlocking(botClientId, GOLDEN_JACK_VO_LEN, goldenVoStartServerTime);
 
         botGoldenJackRevealActive = false;
+        isGoldenJackRevealPhase = false;
     }
 
-    public IEnumerator SimulateBotJackReveal(ulong botClientId)
+    [ClientRpc]
+    void StartExposeEffectClientRpc(int globalZeroHolderIndex, float baseVoLen, ClientRpcParams rpcParams = default)
     {
-        if (botJackRevealActive)
-        {
-            Debug.LogWarning("SimulateBotJackReveal: Already active, ignoring duplicate call.");
-            yield break;
-        }
-        botJackRevealActive = true;
-
-        yield return new WaitForSeconds(Random.Range(1f, 2f));
-
-        var validTargets = new List<int>();
-        for (int i = 0; i < gpm.players.Count; i++)
-        {
-            int globalSeat = gpm.GetGlobalIndexFromLocal(i);
-            ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
-            if (pClientId == ulong.MaxValue) continue; // empty / disconnected
-            if (pClientId == botClientId) continue;    // skip self
-
-            var p = gpm.players[i];
-            if (p != null && p.isInRoom && p.cardsPanel?.cards != null && p.cardsPanel.cards.Count > 0)
-                validTargets.Add(i);
-        }
-
-        if (validTargets.Count == 0)
-        {
-            Debug.LogWarning("[SimulateBotJackReveal] No valid target players!");
-            botJackRevealActive = false;
-            yield break;
-        }
-
-        int targetPlayerIndex = validTargets[Random.Range(0, validTargets.Count)];
-        var tgtPanel = gpm.players[targetPlayerIndex]?.cardsPanel;
-        if (tgtPanel == null || tgtPanel.cards == null || tgtPanel.cards.Count == 0)
-        {
-            botJackRevealActive = false;
-            yield break;
-        }
-        int targetCardIndex = Random.Range(0, tgtPanel.cards.Count);
-
-        var realClientIds = gpm.GetAllHumanClientIds();
-        FlashMarkedOutlineClientRpc(
-            gpm.GetGlobalIndexFromLocal(targetPlayerIndex),
-            targetCardIndex,
-            botClientId,
-            true,
-            new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = realClientIds } }
-        );
-
-        gpm.FreezeTimerUI();
-        if (gpm.turnTimeoutCoroutine != null)
-        {
-            gpm.StopCoroutine(gpm.turnTimeoutCoroutine);
-            gpm.turnTimeoutCoroutine = null;
-        }
-
-        yield return new WaitForSeconds(1.0f);
-
-        int zeroHolderPlayerIndex = -1;
-        for (int pi = 0; pi < gpm.players.Count; pi++)
-        {
-            int globalSeat = gpm.GetGlobalIndexFromLocal(pi);
-            ulong pClientId = gpm.GetClientIdFromGlobalSeat(globalSeat);
-            if (pClientId == ulong.MaxValue) continue;
-            if (pClientId == botClientId) continue;
-
-            var panel = gpm.players[pi]?.cardsPanel;
-            if (panel == null || panel.cards == null) continue;
-
-            for (int ci = 0; ci < panel.cards.Count; ci++)
-            {
-                var c = panel.cards[ci];
-                if (c == null) continue;
-                if (c.Value == CardValue.Zero)
-                {
-                    zeroHolderPlayerIndex = pi;
-                    break;
-                }
-            }
-            if (zeroHolderPlayerIndex != -1) break;
-        }
-
-        if (zeroHolderPlayerIndex != -1)
-        {
-            var allRealClientIds = gpm.GetAllHumanClientIds();
-            if (allRealClientIds.Count > 0)
-            {
-                PlayJackZeroBonusSoundClientRpc(new ClientRpcParams
-                {
-                    Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds }
-                });
-            }
-
-            ShowZeroHolderTimerEffectClientRpc(gpm.GetGlobalIndexFromLocal(zeroHolderPlayerIndex));
-            StartCoroutine(JackZeroBonusEndTurnCoroutine());
-        }
-        else
-        {
-            yield return new WaitForSeconds(1.0f);
-            OnJackRevealDoneServerRpc();
-        }
-
-        botJackRevealActive = false;
+        StartCoroutine(StartExposeEffectLocal(globalZeroHolderIndex, baseVoLen));
     }
+
+    private IEnumerator StartExposeEffectLocal(int globalZeroHolderIndex, float baseVoLen)
+    {
+        float waited = 0f;
+        float killAfter = Mathf.Max(0.1f, baseVoLen + 0.2f);
+        if (gpm._audioSource != null)
+        {
+            while (gpm._audioSource.isPlaying && waited < killAfter)
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (gpm._audioSource.isPlaying)
+                gpm._audioSource.Stop();
+        }
+
+        int localIndex = gpm.GetLocalIndexFromGlobal(globalZeroHolderIndex);
+        if (localIndex >= 0 && localIndex < gpm.players.Count)
+        {
+            var player = gpm.players[localIndex];
+            if (player?.timerOjbect != null)
+            {
+                player.timerOjbect.SetActive(true);
+                var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
+                if (img != null) img.color = Color.red;
+                StartCoroutine(RestoreTimerEffectAfterDelay(player, EXPOSE_VO_LEN));
+            }
+        }
+
+        if (_voChannel == null)
+        {
+            _voChannel = gameObject.AddComponent<AudioSource>();
+            _voChannel.playOnAwake = false;
+            _voChannel.loop = false;
+        }
+        _voChannel.Stop();
+        if (gpm.jackSpecialVoiceClip != null)
+            _voChannel.PlayOneShot(gpm.jackSpecialVoiceClip);
+    }
+
+    public bool IsPowerFlowActive
+    {
+        get
+        {
+            return isJackRevealPhase || isGoldenJackRevealPhase || _exposeGateCo != null;
+        }
+    }
+
 }

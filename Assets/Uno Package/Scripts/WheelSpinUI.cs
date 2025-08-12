@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -29,10 +30,19 @@ public class WheelSpinUI : MonoBehaviour
 
     void Awake()
     {
+        Debug.Log($"[Wheel] Awake client {NetworkManager.Singleton?.LocalClientId}, instances={FindObjectsOfType<WheelSpinUI>(true).Length}"); 
         if (pocketsRotator == null)
             pocketsRotator = transform.Find("Roulette/Group_Pockets") as RectTransform;
 
         if (pocketsRotator) _lastZ = pocketsRotator.localEulerAngles.z;
+
+        if (myWinConfetti != null)
+        {
+            var main = myWinConfetti.main;
+            main.playOnAwake = false;
+            myWinConfetti.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            myWinConfetti.gameObject.SetActive(false);
+        }
     }
 
     void Update()
@@ -132,11 +142,13 @@ public class WheelSpinUI : MonoBehaviour
 
     public void PlayLocalWinFX()
     {
+        Debug.Log($"[Confetti] PlayLocalWinFX on client {NetworkManager.Singleton?.LocalClientId}");
         if (myWinConfetti == null) return;
         myWinConfetti.gameObject.SetActive(true);
         myWinConfetti.Play();
         CardGameManager.PlaySound(GamePlayManager.instance.uno_btn_clip);
     }
+
 
     public void StopLocalWinFX()
     {

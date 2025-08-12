@@ -8,7 +8,7 @@ public class King : NetworkBehaviour
 {
     public static King Instance;
 
-    private bool isKingPhase = false;
+    public bool isKingPhase = false;
     private Card selectedCard = null;
     private int selectedLocalSeat = -1;
     private int selectedCardIndex = -1;

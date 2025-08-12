@@ -25,6 +25,7 @@ public class MultiplayerManager : NetworkBehaviour
     public NetworkList<PlayerData> playerDataNetworkList;
     private string playerName;
     public const ulong BOT_CLIENT_ID = 9999;
+    private bool IsBot(ulong clientId) => clientId >= 9000;
     private NetworkList<ulong> pendingSwapRequests;
     public NetworkList<ulong> rematchRequests;
 
@@ -312,67 +313,87 @@ public class MultiplayerManager : NetworkBehaviour
         return false;
     }
 
-
-
     public void AddBotPlayer()
     {
-        Debug.Log("ADDING BOTS");
-        if (playerDataNetworkList.Count >= MAX_PLAYER_AMOUNT)
-            return;
+        // (unchanged logic, but we strongly suggest to set isSuperbot=false explicitly)
+        if (playerDataNetworkList.Count >= MAX_PLAYER_AMOUNT) return;
 
-        ulong botClientId = BOT_CLIENT_ID;
-        HashSet<ulong> usedIds = new HashSet<ulong>();
-        foreach (var pd in playerDataNetworkList)
-            usedIds.Add(pd.clientId);
+        ulong botClientId = GetNextBotClientId();
+        if (botClientId < 9000) return;
 
-        while (usedIds.Contains(botClientId) && botClientId > 9000)
-            botClientId--;
-
-        if (usedIds.Contains(botClientId))
-            return;
-
-        HashSet<int> usedNumbers = new HashSet<int>();
-        foreach (var pd in playerDataNetworkList)
-        {
-            if (pd.clientId >= 9000)
-            {
-                string nameStr = pd.playerName.ToString();
-                if (nameStr.StartsWith("Bot "))
-                {
-                    if (int.TryParse(nameStr.Substring(4), out int n))
-                        usedNumbers.Add(n);
-                }
-            }
-        }
-
-        int botNumber = 1;
-        while (usedNumbers.Contains(botNumber))
-            botNumber++;
-
+        int botNumber = GetNextBotNumber(prefix: "Bot ");
         int randomAvatarIndex = UnityEngine.Random.Range(0, 14);
 
-        PlayerData botData = new PlayerData
+        var botData = new PlayerData
         {
             clientId = botClientId,
             playerName = $"Bot {botNumber}",
             playerId = $"bot-id-{botNumber}",
             isReady = true,
-            avatarIndex = randomAvatarIndex
+            avatarIndex = randomAvatarIndex,
+            isSuperbot = false // explicit
         };
 
-
         playerDataNetworkList.Add(botData);
+    }
+
+    public void AddSuperbotPlayer()
+    {
+        if (playerDataNetworkList.Count >= MAX_PLAYER_AMOUNT) return;
+
+        ulong botClientId = GetNextBotClientId();
+        if (botClientId < 9000) return;
+
+        int num = GetNextBotNumber(prefix: "Superbot ");
+        int randomAvatarIndex = UnityEngine.Random.Range(0, 14);
+
+        var super = new PlayerData
+        {
+            clientId = botClientId,
+            playerName = $"Superbot {num}",
+            playerId = $"superbot-id-{num}",
+            isReady = true,
+            avatarIndex = randomAvatarIndex,
+            isSuperbot = true
+        };
+
+        playerDataNetworkList.Add(super);
+    }
+
+    private int GetNextBotNumber(string prefix)
+    {
+        var used = new HashSet<int>();
+        foreach (var pd in playerDataNetworkList)
+        {
+            if (pd.clientId >= 9000)
+            {
+                string name = pd.playerName.ToString();
+                if (name.StartsWith(prefix))
+                {
+                    if (int.TryParse(name.Substring(prefix.Length), out int n))
+                        used.Add(n);
+                }
+            }
+        }
+        int num = 1;
+        while (used.Contains(num)) num++;
+        return num;
     }
 
     public ulong GetNextBotClientId()
     {
         ulong id = BOT_CLIENT_ID;
-        HashSet<ulong> used = new HashSet<ulong>();
-        foreach (var pd in playerDataNetworkList)
-            used.Add(pd.clientId);
-
+        var used = new HashSet<ulong>();
+        foreach (var pd in playerDataNetworkList) used.Add(pd.clientId);
         while (used.Contains(id) && id > 9000) id--;
         return id;
+    }
+
+    public bool IsSuperbotClientId(ulong clientId)
+    {
+        int idx = GetPlayerDataIndexFromClientId(clientId);
+        if (idx == -1) return false;
+        return playerDataNetworkList[idx].isSuperbot;
     }
 
     public void RemoveBotPlayer()
@@ -398,14 +419,10 @@ public class MultiplayerManager : NetworkBehaviour
     {
         int count = 0;
         foreach (var player in playerDataNetworkList)
-        {
-            if (player.clientId != BOT_CLIENT_ID)
-                count++;
-        }
+            if (!IsBot(player.clientId)) count++;
         return count;
     }
 
-    
 
     public void RemoveBotPlayerById(ulong botClientId)
     {
@@ -469,17 +486,6 @@ public class MultiplayerManager : NetworkBehaviour
         int playerIdx = GetPlayerDataIndexFromClientId(clientId);
         return TeamUtils.GetTeamIndex(playerIdx);
     }
-
-    private int GetTotalHumanPlayers()
-    {
-        int count = 0;
-        foreach (var pd in playerDataNetworkList)
-            if (!IsBot(pd.clientId)) count++;
-        return count;
-    }
-
-    private bool IsBot(ulong clientId) => clientId >= 9000;
-
 
     public int GetReadyPlayerCount()
     {

@@ -9,7 +9,7 @@ public class Queen : NetworkBehaviour
 
     private Card firstCardSelected = null;
     private Card secondCardSelected = null;
-    private bool isQueenSwapPhase = false;
+    public bool isQueenSwapPhase = false;
 
     private int firstLocalSeat = -1;
     private int firstCardIndex = -1;

@@ -40,6 +40,9 @@ public class CardGameScene : MonoBehaviour
 
         if (CardGameManager.currentGameMode == GameMode.MultiPlayer)
         {
+            GamePlayManager.instance._peekPhaseStarted = false;
+            GamePlayManager.instance._wheelPhaseStarted = false;
+            GamePlayManager.instance._wheelPhaseStarted = false;
             GamePlayManager.instance.SetupNetworkedPlayerSeats();
             GamePlayManager.instance.StartMultiplayerGame();
         }

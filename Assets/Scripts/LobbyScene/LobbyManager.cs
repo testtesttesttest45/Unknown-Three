@@ -491,5 +491,9 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
+    public void AddSuperbotToLobby()
+    {
+        MultiplayerManager.Instance.AddSuperbotPlayer();
+    }
 
 }

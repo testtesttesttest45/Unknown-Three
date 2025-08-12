@@ -5962,7 +5962,7 @@ MonoBehaviour:
   queenVoiceClip: {fileID: 8300000, guid: ef5b9247c28d8494bb8ed0fddb1707db, type: 3}
   kingVoiceClip: {fileID: 8300000, guid: 0fd6193c4196b1546b1be55256fe2f0a, type: 3}
   fiendVoiceClip: {fileID: 8300000, guid: 286c292c9274ab34987e9ffb4f1a1f3e, type: 3}
-  fiendRevengeVoiceClip: {fileID: 8300000, guid: 72d8bfe677657714e98966dbabaf5841,
+  fiendRevengeVoiceClip: {fileID: 8300000, guid: f6c217894c7843d49994cfe6c7f9c372,
     type: 3}
   jackSpecialVoiceClip: {fileID: 8300000, guid: 182d4105501f18245b35e34c7171cb47,
     type: 3}
@@ -5984,10 +5984,14 @@ MonoBehaviour:
   avatarGoldenJack: {fileID: 21300000, guid: eb2287f75e6549f4897b31dcf2d38874, type: 3}
   specialAvatarDuration: 2
   currentPowerOwnerGlobalSeat: -1
+  currentPowerValue: 0
   hostBeatInterval: 0.5
   hostFreezeThreshold: 1.6
   hostGoneThreshold: 8
   hostAwayAssumeDeadSeconds: 20
+  _peekPhaseStarted: 0
+  _wheelPhaseStarted: 0
+  _hostWheelInProgress: 0
   _currentType: 0
   _currentValue: 0
   seatOrderGlobal: 
@@ -7925,6 +7929,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67d903f69a445ba46952f4c20e1944d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isKingPhase: 0
 --- !u!1001 &401498888
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -39629,6 +39634,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e22ee04e548cbe344a6906434916ad6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isQueenSwapPhase: 0
 --- !u!4 &2127662518
 Transform:
   m_ObjectHideFlags: 0

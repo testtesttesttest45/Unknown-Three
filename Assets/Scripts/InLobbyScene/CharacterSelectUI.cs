@@ -14,6 +14,8 @@ public class CharacterSelectUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI lobbyCodeText;
     [SerializeField] private TextMeshProUGUI readyButtonText;
     [SerializeField] private Button addBotButton;
+    [SerializeField] private Button addSuperbotButton;
+
     public static CharacterSelectUI Instance { get; private set; }
 
     [SerializeField] private Transform playerSlotContainer;
@@ -23,12 +25,26 @@ public class CharacterSelectUI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        if (!LobbyManager.Instance.IsLobbyHost())
+
+        bool isHost = LobbyManager.Instance.IsLobbyHost();
+
+        if (!isHost)
+        {
             addBotButton.gameObject.SetActive(false);
+            if (addSuperbotButton != null) addSuperbotButton.gameObject.SetActive(false);
+        }
 
         addBotButton.onClick.AddListener(() => {
             LobbyManager.Instance.AddBotToLobby();
         });
+
+        if (addSuperbotButton != null)
+        {
+            addSuperbotButton.onClick.AddListener(() => {
+                LobbyManager.Instance.AddSuperbotToLobby();
+            });
+        }
+
         mainMenuButton.onClick.AddListener(() => {
             if (LobbyManager.Instance.IsLobbyHost())
                 LobbyManager.Instance.DeleteLobby();
@@ -69,12 +85,13 @@ public class CharacterSelectUI : MonoBehaviour
     private void UpdateReadyButtonState(object sender, System.EventArgs e)
     {
         int total = MultiplayerManager.Instance.playerDataNetworkList.Count;
-        int ready = MultiplayerManager.Instance.GetReadyPlayerCount();
 
         addBotButton.interactable = total < MultiplayerManager.MAX_PLAYER_AMOUNT;
-        readyButton.interactable = true;
-        readyButtonText.text = $"Ready {ready}/{total}";
+        if (addSuperbotButton != null)
+            addSuperbotButton.interactable = total < MultiplayerManager.MAX_PLAYER_AMOUNT;
 
+        readyButton.interactable = true;
+        readyButtonText.text = $"Ready {MultiplayerManager.Instance.GetReadyPlayerCount()}/{total}";
         playerCountText.text = $"{total}/{MultiplayerManager.MAX_PLAYER_AMOUNT}";
 
         RefreshPlayerSlots();
