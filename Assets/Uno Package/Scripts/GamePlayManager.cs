@@ -855,7 +855,7 @@ public class GamePlayManager : NetworkBehaviour
         List<CardValue> allValues = new List<CardValue>
         {
             CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four, CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine, CardValue.Ten,
-            CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend
+            CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
         };
 
         // purple only have King, Queen, Jack
