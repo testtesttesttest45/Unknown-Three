@@ -2700,58 +2700,32 @@ public class GamePlayManager : NetworkBehaviour
         return bestIdx;
     }
 
-    [HideInInspector] private List<bool> _avatarMaskCache;
-
-    /// <summary>
-    /// Shows only the killer's avatar (by LOCAL seat) on the Overlay canvas.
-    /// Everyone else’s avatar is hidden. We cache original active states to restore later.
-    /// </summary>
-    public void SpotlightMaskAvatars(int killerLocalSeat)
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestPlayEmojiServerRpc(int globalSeat, int emojiIndex, ServerRpcParams rpcParams = default)
     {
-        if (players == null || players.Count == 0) return;
+        PlayEmojiClientRpc(globalSeat, emojiIndex);
+    }
 
-        if (_avatarMaskCache == null || _avatarMaskCache.Count != players.Count)
-            _avatarMaskCache = Enumerable.Repeat(true, players.Count).ToList();
+    [ClientRpc]
+    public void PlayEmojiClientRpc(int globalSeat, int emojiIndex, ClientRpcParams rpcParams = default)
+    {
+        int localSeat = GetLocalIndexFromGlobal(globalSeat);
+        if (localSeat < 0 || localSeat >= players.Count) return;
 
-        for (int i = 0; i < players.Count; i++)
+        var p2 = players[localSeat];
+        if (p2 == null) return;
+
+        p2.SpawnEmojiLocal(emojiIndex);
+
+        if (CardGameManager.IsSound && _audioSource != null &&
+            p2.emojiSfx != null && emojiIndex >= 0 && emojiIndex < p2.emojiSfx.Length)
         {
-            var p = players[i];
-            if (p == null) continue;
-
-            var avatarGO = GetAvatarRootGO(p);
-            if (avatarGO == null) continue;
-
-            _avatarMaskCache[i] = avatarGO.activeSelf;        // remember original state
-            avatarGO.SetActive(i == killerLocalSeat);         // show only killer
+            var clip = p2.emojiSfx[emojiIndex];
+            if (clip != null)
+                _audioSource.PlayOneShot(clip, p2.emojiSfxVolume);
         }
     }
 
-    /// <summary>
-    /// Restores all avatars to their pre-mask visibility.
-    /// </summary>
-    public void SpotlightRestoreAvatars()
-    {
-        if (players == null || _avatarMaskCache == null) return;
-
-        for (int i = 0; i < players.Count; i++)
-        {
-            var p = players[i];
-            if (p == null) continue;
-
-            var avatarGO = GetAvatarRootGO(p);
-            if (avatarGO == null) continue;
-
-            bool back = (i < _avatarMaskCache.Count) ? _avatarMaskCache[i] : true;
-            avatarGO.SetActive(back);
-        }
-    }
-    private GameObject GetAvatarRootGO(Player2 p)
-    {
-        if (p.avatarImage != null) return p.avatarImage.gameObject;
-
-        var t = p.transform.Find("Avatar") ?? p.transform.Find("AvatarRoot");
-        return t != null ? t.gameObject : null;
-    }
 }
 
 [System.Serializable]
