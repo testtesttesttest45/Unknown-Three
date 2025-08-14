@@ -146,7 +146,7 @@ public class WheelSpinUI : MonoBehaviour
         if (myWinConfetti == null) return;
         myWinConfetti.gameObject.SetActive(true);
         myWinConfetti.Play();
-        CardGameManager.PlaySound(GamePlayManager.instance.uno_btn_clip);
+        CardGameManager.PlaySound(GamePlayManager.instance.special_click);
     }
 
 

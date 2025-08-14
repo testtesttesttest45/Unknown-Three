@@ -13,7 +13,8 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip music_loss_clip;
     public AudioClip draw_card_clip;
     public AudioClip throw_card_clip;
-    public AudioClip uno_btn_clip;
+    public AudioClip normal_click;
+    public AudioClip special_click;
     public AudioClip choose_color_clip;
 
     public float cardDealTime = 3f;
@@ -136,6 +137,18 @@ public class GamePlayManager : NetworkBehaviour
     public bool _hostWheelInProgress = false;
     private Coroutine _hostAfterWheelCo;
     private Coroutine _wheelSpinRoutine;
+
+    [Header("Good Kill SFX")]
+    public AudioClip goodKill; 
+    public AudioClip goodKillEnhanced;
+
+    [Header("Spotlight Celebration")]
+    public GameObject spotlightPanel;
+    public ParticleSystem spotlightConfetti;
+    public GameObject spotlight;
+    public Transform[] spotlightTargets;
+    [Tooltip("Degrees to add after aiming (0 if the art points straight up at Z=0).")]
+    public float spotlightZArtOffset = 0f;
 
     public static bool GameHasEnded { get; private set; } = false;
     public static void ResetGameHasEnded()
@@ -392,6 +405,8 @@ public class GamePlayManager : NetworkBehaviour
 
             players.Add(p2);
         }
+
+
     }
 
     public List<ulong> seatOrderGlobal = new List<ulong>();
@@ -2071,7 +2086,7 @@ public class GamePlayManager : NetworkBehaviour
         float randomRot = Random.Range(-50, 50f);
         StartCoroutine(AnimateCardMove(wasteObj, cardDeckTransform.position, cardWastePile.transform.position, 0.3f, randomRot));
         UpdateDeckVisualLocal(deck);
-        OnUnoClick();
+        OnUnoClick(discardedCard.Value);
     }
 
     public IEnumerator AnimateCardMove(Card card, Vector3 from, Vector3 to, float duration, float? targetZRot = null)
@@ -2225,7 +2240,7 @@ public class GamePlayManager : NetworkBehaviour
             turnEndedByTimeout = false;
             return;
         }
-        CardGameManager.PlaySound(uno_btn_clip);
+        CardGameManager.PlaySound(normal_click);
     }
 
     IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
@@ -2307,7 +2322,7 @@ public class GamePlayManager : NetworkBehaviour
 
         float randomRot = Random.Range(-50, 50f);
         StartCoroutine(AnimateCardMove(discard, cardDeckTransform.position, cardWastePile.transform.position, 0.3f, randomRot));
-        OnUnoClick();
+        OnUnoClick((CardValue)cardValue);
     }
 
     public void PutCardToWastePile(Card c, Player2 p = null)
@@ -2435,18 +2450,25 @@ public class GamePlayManager : NetworkBehaviour
         unoBtn.GetComponent<Button>().interactable = false;
     }
 
-    public void OnUnoClick()
+    public void OnUnoClick(CardValue discardedValue)
     {
         DisableUnoBtn();
+
         if (CurrentPlayer.wasTimeout)
         {
             CurrentPlayer.wasTimeout = false;
             return;
         }
-        CurrentPlayer.ShowMessage("Discarded", true);
+
+        bool isSpecial = IsSpecialCard(discardedValue);
+
+        CurrentPlayer.ShowMessage("Discarded", false);
         CurrentPlayer.unoClicked = true;
-        CardGameManager.PlaySound(uno_btn_clip);
+
+        // Sound: special vs normal
+        CardGameManager.PlaySound(isSpecial ? special_click : normal_click);
     }
+
 
     public void FreezeTimerUI()
     {
@@ -2455,7 +2477,7 @@ public class GamePlayManager : NetworkBehaviour
 
     private bool IsSpecialCard(CardValue value)
     {
-        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend || value == CardValue.GoldenJack;
+        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend || value == CardValue.GoldenJack || value == CardValue.Skip;
     }
 
     private bool ShouldShowWasteArrow()
@@ -2480,7 +2502,7 @@ public class GamePlayManager : NetworkBehaviour
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
         if (localIndex >= 0 && localIndex < players.Count)
         {
-            players[localIndex].ShowMessage("Timeout", true, 1f);
+            players[localIndex].ShowMessage("Timeout", false, 1f);
             players[localIndex].wasTimeout = true;
         }
     }
@@ -2501,7 +2523,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         int localIndex = GetLocalIndexFromGlobal(globalPlayerIndex);
         if (localIndex >= 0 && localIndex < players.Count)
-            players[localIndex].ShowMessage("Replaced", true, 1.1f);
+            players[localIndex].ShowMessage("Replaced", false, 1.1f);
     }
 
     [ClientRpc]
@@ -2678,6 +2700,58 @@ public class GamePlayManager : NetworkBehaviour
         return bestIdx;
     }
 
+    [HideInInspector] private List<bool> _avatarMaskCache;
+
+    /// <summary>
+    /// Shows only the killer's avatar (by LOCAL seat) on the Overlay canvas.
+    /// Everyone else’s avatar is hidden. We cache original active states to restore later.
+    /// </summary>
+    public void SpotlightMaskAvatars(int killerLocalSeat)
+    {
+        if (players == null || players.Count == 0) return;
+
+        if (_avatarMaskCache == null || _avatarMaskCache.Count != players.Count)
+            _avatarMaskCache = Enumerable.Repeat(true, players.Count).ToList();
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null) continue;
+
+            var avatarGO = GetAvatarRootGO(p);
+            if (avatarGO == null) continue;
+
+            _avatarMaskCache[i] = avatarGO.activeSelf;        // remember original state
+            avatarGO.SetActive(i == killerLocalSeat);         // show only killer
+        }
+    }
+
+    /// <summary>
+    /// Restores all avatars to their pre-mask visibility.
+    /// </summary>
+    public void SpotlightRestoreAvatars()
+    {
+        if (players == null || _avatarMaskCache == null) return;
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null) continue;
+
+            var avatarGO = GetAvatarRootGO(p);
+            if (avatarGO == null) continue;
+
+            bool back = (i < _avatarMaskCache.Count) ? _avatarMaskCache[i] : true;
+            avatarGO.SetActive(back);
+        }
+    }
+    private GameObject GetAvatarRootGO(Player2 p)
+    {
+        if (p.avatarImage != null) return p.avatarImage.gameObject;
+
+        var t = p.transform.Find("Avatar") ?? p.transform.Find("AvatarRoot");
+        return t != null ? t.gameObject : null;
+    }
 }
 
 [System.Serializable]
