@@ -31,6 +31,7 @@ public class Player2 : MonoBehaviour
     public RectTransform emojiPanel;
     public RectTransform emojiDisplay;
     public RectTransform[] emojiButtons;
+    public RectTransform[] emojiHoverVisuals;
     public Image[] emojiCooldownOverlays;
     public GameObject[] emojiPrefabs;
     public float emojiCooldownSeconds = 10f;
@@ -40,10 +41,20 @@ public class Player2 : MonoBehaviour
     private int _hoverIndex = -1;
     private float _emojiCooldownRemaining = 0f;
     private Coroutine _emojiCooldownCo;
+    private const float HoverScale = 1.3f;
+
+    [Header("Emoji Panel FX")]
+    public float emojiFadeDuration = 0.15f;
+    public AnimationCurve emojiFadeCurve = null;
+    public bool emojiPopScale = true;
+
+    private CanvasGroup _emojiCg;
+    private Coroutine _emojiFadeCo;
+    private Vector3 _emojiBaseScale = Vector3.one;
 
     [Header("Emoji SFX")]
     public AudioClip[] emojiSfx;
-    [Range(0f, 1f)] public float emojiSfxVolume = 0.95f;
+    [Range(0f, 1f)] public float emojiSfxVolume = 0.80f;
 
     public void SetAvatarProfile(AvatarProfile p)
     {
@@ -64,6 +75,8 @@ public class Player2 : MonoBehaviour
         _rootCanvas = GetComponentInParent<Canvas>();
         WireAvatarHold();
         HideEmojiPanel();
+        _emojiBaseScale = emojiPanel ? emojiPanel.localScale : Vector3.one;
+        if (emojiFadeCurve == null) emojiFadeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
         UpdateCooldownOverlays();
     }
 
@@ -249,7 +262,7 @@ public class Player2 : MonoBehaviour
             go.transform.localScale = Vector3.one;
         }
 
-        Destroy(go, 4.5f);
+        Destroy(go, 3f);
     }
 
     private void WireAvatarHold()
@@ -329,21 +342,91 @@ public class Player2 : MonoBehaviour
 
     private void ShowEmojiPanel()
     {
-        if (emojiPanel != null) emojiPanel.gameObject.SetActive(true);
+        if (!emojiPanel) return;
+
+        var cg = EnsureEmojiCanvasGroup();
+        if (_emojiFadeCo != null) StopCoroutine(_emojiFadeCo);
+
+        emojiPanel.gameObject.SetActive(true);
+
+        // Start from current values (supports interrupting mid-fade)
+        float fromA = cg.alpha;
+        float toA = 1f;
+
+        // Let it capture drag immediately
+        cg.blocksRaycasts = true;
+        cg.interactable = true;
+
+        // Optional “pop” scale
+        Vector3 fromS = emojiPanel.localScale;
+        Vector3 toS = emojiPopScale ? _emojiBaseScale : fromS;
+        if (emojiPopScale && fromS == _emojiBaseScale) fromS = _emojiBaseScale * 0.96f; // subtle pop-in
+
+        _emojiFadeCo = StartCoroutine(FadeEmojiPanel(fromA, toA, fromS, toS, true));
     }
 
     private void HideEmojiPanel()
     {
-        if (emojiPanel != null) emojiPanel.gameObject.SetActive(false);
-        HighlightHover(-1);
+        if (!emojiPanel) return;
+
+        var cg = EnsureEmojiCanvasGroup();
+        if (_emojiFadeCo != null) StopCoroutine(_emojiFadeCo);
+
+        float fromA = cg.alpha;
+        float toA = 0f;
+
+        // Don’t block input while fading out
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+
+        Vector3 fromS = emojiPanel.localScale;
+        Vector3 toS = emojiPopScale ? _emojiBaseScale * 0.96f : fromS;
+
+        _emojiFadeCo = StartCoroutine(FadeEmojiPanel(fromA, toA, fromS, toS, false));
     }
+
+    private IEnumerator FadeEmojiPanel(float fromA, float toA, Vector3 fromS, Vector3 toS, bool showing)
+    {
+        var cg = EnsureEmojiCanvasGroup();
+        float d = Mathf.Max(0.0001f, emojiFadeDuration);
+        float t = 0f;
+
+        // Make sure we start visible for fade-in
+        if (showing) { cg.alpha = fromA; }
+
+        while (t < d)
+        {
+            t += Time.unscaledDeltaTime; // UI feels better on unscaled time
+            float k = emojiFadeCurve != null ? emojiFadeCurve.Evaluate(t / d) : (t / d);
+
+            cg.alpha = Mathf.Lerp(fromA, toA, k);
+            if (emojiPopScale && emojiPanel)
+                emojiPanel.localScale = Vector3.Lerp(fromS, toS, k);
+
+            yield return null;
+        }
+
+        cg.alpha = toA;
+        if (!showing)
+        {
+            // Reset and hide at the end
+            if (emojiPopScale && emojiPanel) emojiPanel.localScale = _emojiBaseScale;
+            emojiPanel.gameObject.SetActive(false);
+        }
+        _emojiFadeCo = null;
+    }
+
 
     private void HighlightHover(int idx)
     {
         for (int i = 0; i < (emojiButtons?.Length ?? 0); i++)
         {
             if (emojiButtons[i] == null) continue;
-            emojiButtons[i].localScale = (i == idx) ? Vector3.one * 1.08f : Vector3.one;
+
+            emojiButtons[i].localScale = Vector3.one;
+
+            if (emojiHoverVisuals != null && i < emojiHoverVisuals.Length && emojiHoverVisuals[i] != null)
+                emojiHoverVisuals[i].localScale = (i == idx) ? Vector3.one * HoverScale : Vector3.one;
         }
     }
 
@@ -401,4 +484,15 @@ public class Player2 : MonoBehaviour
             }
         }
     }
+
+    private CanvasGroup EnsureEmojiCanvasGroup()
+    {
+        if (!_emojiCg && emojiPanel)
+        {
+            _emojiCg = emojiPanel.GetComponent<CanvasGroup>();
+            if (!_emojiCg) _emojiCg = emojiPanel.gameObject.AddComponent<CanvasGroup>();
+        }
+        return _emojiCg;
+    }
+
 }
