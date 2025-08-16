@@ -921,31 +921,6 @@ public class GamePlayManager : NetworkBehaviour
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero)); cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero)); cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
 
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
