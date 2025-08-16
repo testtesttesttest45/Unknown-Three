@@ -7,6 +7,7 @@ public class WastePile : MonoBehaviour
     private Card wasteCard;
     private bool isChoosing = false;
     private Vector3 originalScale;
+    private Coroutine wasteGuardCo;
 
     public void SetCard(Card card)
     {
@@ -98,7 +99,8 @@ public class WastePile : MonoBehaviour
             handCard.onClick = (c) => OnHandCardClicked(index, c);
         }
 
-        GamePlayManager.instance.StartCoroutine(WasteSelectionGuard());
+        if (wasteGuardCo != null) StopCoroutine(wasteGuardCo);
+        wasteGuardCo = GamePlayManager.instance.StartCoroutine(WasteSelectionGuard());
 
         GamePlayManager.instance.peekedCard = wasteCard;
         GamePlayManager.instance.hasPeekedCard = true;
@@ -139,10 +141,17 @@ public class WastePile : MonoBehaviour
 
     private IEnumerator WasteSelectionGuard()
     {
-        while (isChoosing && GamePlayManager.instance.turnTimerLeft > 0f)
+        float timeout = Mathf.Max(0.1f, GamePlayManager.instance.turnTimerDuration + 0.25f);
+        float t = 0f;
+
+        while (isChoosing && GamePlayManager.instance.IsMyTurn() && t < timeout)
+        {
+            t += Time.deltaTime;
             yield return null;
+        }
 
         if (isChoosing) CancelChoosing();
+        wasteGuardCo = null;
     }
 
     private void DisableHandGlow()
@@ -163,16 +172,20 @@ public class WastePile : MonoBehaviour
         isChoosing = false;
         StopAllCoroutines();
         DisableHandGlow();
+
         wasteCard.transform.localScale = originalScale;
 
         GamePlayManager.instance.wasteInteractionStarted = false;
-
         GamePlayManager.instance.hasPeekedCard = false;
         GamePlayManager.instance.peekedCard = null;
 
         ulong myClientId = NetworkManager.Singleton.LocalClientId;
         GamePlayManager.instance.peekedCardsByClientId.Remove(myClientId);
+
+        GamePlayManager.instance.UpdateDeckClickability();
+        GamePlayManager.instance.RefreshWasteInteractivity();
     }
+
 
     private bool IsTopCard()
     {

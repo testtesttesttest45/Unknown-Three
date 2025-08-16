@@ -2313,6 +2313,14 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject2.SetActive(false);
         }
 
+        if (turnEndedByTimeout)
+        {
+            turnEndedByTimeout = false;
+            if (IsHost) StartCoroutine(DelayedNextPlayerTurn(0.2f));
+            return;
+        }
+
+        // Normal path
         if (IsHost)
         {
             var playerList = MultiplayerManager.Instance.playerDataNetworkList;
