@@ -35,11 +35,7 @@ public class CardGameScene : MonoBehaviour
         {
             menuTooltipsToggle.onValueChanged.RemoveAllListeners();
             menuTooltipsToggle.SetIsOnWithoutNotify(CardGameManager.ShowTooltips);
-            menuTooltipsToggle.onValueChanged.AddListener(on =>
-            {
-                CardGameManager.SetShowTooltips(on);
-                GamePlayManager.instance?.HideTooltipOverlay();
-            });
+            menuTooltipsToggle.onValueChanged.AddListener(OnTooltipsToggleChanged);
         }
         else
         {

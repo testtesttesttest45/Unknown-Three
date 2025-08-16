@@ -581,7 +581,7 @@ public class Jack : NetworkBehaviour
                 StartCoroutine(RestoreTimerEffectAfterDelay(player, exposeSeconds, epoch));
 
                 player.ShowMessage("Zero detected", true, Mathf.Min(exposeSeconds, 1.5f));
-                if (gpm.exposed != null) gpm._audioSource.PlayOneShot(gpm.exposed, 0.2f);
+                if (gpm.exposed != null) gpm._audioSource.PlayOneShot(gpm.exposed, 0.1f);
             }
         }
 

@@ -248,6 +248,16 @@ public class GamePlayManager : NetworkBehaviour
         _audioSource.playOnAwake = false;
         _audioSource.loop = false;
         _audioSource.spatialBlend = 0f;
+
+        if (tooltipParent != null)
+        {
+            if (tooltipCanvasGroup == null)
+                tooltipCanvasGroup = tooltipParent.GetComponent<CanvasGroup>() ?? tooltipParent.AddComponent<CanvasGroup>();
+
+            tooltipCanvasGroup.alpha = 0f;
+            tooltipParent.SetActive(false);
+            WireTooltipClickToClose();
+        }
     }
 
     void Start()
@@ -949,6 +959,18 @@ public class GamePlayManager : NetworkBehaviour
     private IEnumerator StartPeekingPhase()
     {
         isPeekingPhase = true;
+
+        yield return null;
+        while ((loadingView != null && loadingView.activeInHierarchy)
+             || tooltipParent == null
+             || tooltipText == null
+             || tooltipCanvasGroup == null)
+        {
+            // Try to self-heal refs if you like:
+            if (tooltipParent != null && tooltipCanvasGroup == null)
+                tooltipCanvasGroup = tooltipParent.GetComponent<CanvasGroup>() ?? tooltipParent.AddComponent<CanvasGroup>();
+            yield return null;
+        }
         ShowTooltipOverlay("The Goal of this game is to have the lowest card values in your hands! Start by looking at your LEFT and RIGHT hand cards!");
         int localPlayerIndex = 0;
         var myCards = players[localPlayerIndex].cardsPanel.cards;
