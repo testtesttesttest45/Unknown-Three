@@ -56,6 +56,9 @@ public class Player2 : MonoBehaviour
     public AudioClip[] emojiSfx;
     [Range(0f, 1f)] public float emojiSfxVolume = 0.80f;
 
+    [Header("Spotlight/Trophy")]
+    public GameObject TrophyBackground;
+
     public void SetAvatarProfile(AvatarProfile p)
     {
         playerName = p.avatarName;
@@ -78,6 +81,7 @@ public class Player2 : MonoBehaviour
         _emojiBaseScale = emojiPanel ? emojiPanel.localScale : Vector3.one;
         if (emojiFadeCurve == null) emojiFadeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
         UpdateCooldownOverlays();
+        if (TrophyBackground) TrophyBackground.SetActive(false);
     }
 
     public void OnTurn()
@@ -349,15 +353,12 @@ public class Player2 : MonoBehaviour
 
         emojiPanel.gameObject.SetActive(true);
 
-        // Start from current values (supports interrupting mid-fade)
         float fromA = cg.alpha;
         float toA = 1f;
 
-        // Let it capture drag immediately
         cg.blocksRaycasts = true;
         cg.interactable = true;
 
-        // Optional “pop” scale
         Vector3 fromS = emojiPanel.localScale;
         Vector3 toS = emojiPopScale ? _emojiBaseScale : fromS;
         if (emojiPopScale && fromS == _emojiBaseScale) fromS = _emojiBaseScale * 0.96f; // subtle pop-in
@@ -375,7 +376,6 @@ public class Player2 : MonoBehaviour
         float fromA = cg.alpha;
         float toA = 0f;
 
-        // Don’t block input while fading out
         cg.blocksRaycasts = false;
         cg.interactable = false;
 
@@ -391,12 +391,11 @@ public class Player2 : MonoBehaviour
         float d = Mathf.Max(0.0001f, emojiFadeDuration);
         float t = 0f;
 
-        // Make sure we start visible for fade-in
         if (showing) { cg.alpha = fromA; }
 
         while (t < d)
         {
-            t += Time.unscaledDeltaTime; // UI feels better on unscaled time
+            t += Time.unscaledDeltaTime;
             float k = emojiFadeCurve != null ? emojiFadeCurve.Evaluate(t / d) : (t / d);
 
             cg.alpha = Mathf.Lerp(fromA, toA, k);

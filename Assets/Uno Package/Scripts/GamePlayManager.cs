@@ -15,6 +15,7 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip throw_card_clip;
     public AudioClip normal_click;
     public AudioClip special_click;
+    public AudioClip exposed;
     public AudioClip choose_color_clip;
 
     public float cardDealTime = 3f;
@@ -55,7 +56,7 @@ public class GamePlayManager : NetworkBehaviour
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
     public float turnTimerDuration = 10f;
-    private float turnTimerLeft = 0f;
+    public float turnTimerLeft = 0f;
     private bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
     public bool isKingRefillPhase = false;
@@ -149,6 +150,19 @@ public class GamePlayManager : NetworkBehaviour
     public Transform[] spotlightTargets;
     [Tooltip("Degrees to add after aiming (0 if the art points straight up at Z=0).")]
     public float spotlightZArtOffset = 0f;
+    [Header("UI Animation")]
+    public Transform cardAnimRoot;
+
+    private Transform AnimRoot => cardAnimRoot != null ? cardAnimRoot : this.transform;
+
+    [Header("Tooltips")]
+    public GameObject tooltipParent;
+    [SerializeField] private Button tooltipDimmedButton;
+    public TMPro.TextMeshProUGUI tooltipText;
+    [SerializeField] private Button tooltipPopupButton;
+    [SerializeField] private CanvasGroup tooltipCanvasGroup;
+    [SerializeField] private float fadeDuration = 0.25f;
+    private Coroutine tooltipFadeRoutine;
 
     public static bool GameHasEnded { get; private set; } = false;
     public static void ResetGameHasEnded()
@@ -228,16 +242,25 @@ public class GamePlayManager : NetworkBehaviour
     public static GamePlayManager instance;
 
 
+    private void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
+        _audioSource.playOnAwake = false;
+        _audioSource.loop = false;
+        _audioSource.spatialBlend = 0f;
+    }
+
     void Start()
     {
-        Application.targetFrameRate = 120;
+        Application.targetFrameRate = 60;
         instance = this;
         Input.multiTouchEnabled = false;
         previousPlayerIndex = -1;
 
-        _audioSource = GetComponent<AudioSource>();
-        if (_audioSource == null)
-            _audioSource = gameObject.AddComponent<AudioSource>();
+        
+
+        if (tooltipParent != null) tooltipParent.SetActive(false);
+        WireTooltipClickToClose();
 
         var playerList = MultiplayerManager.Instance.playerDataNetworkList;
         for (int i = 0; i < playerList.Count; i++)
@@ -869,7 +892,7 @@ public class GamePlayManager : NetworkBehaviour
 
         List<CardValue> allValues = new List<CardValue>
         {
-            CardValue.Ten,
+            CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four, CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine, CardValue.Ten,
             CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
         };
 
@@ -896,6 +919,31 @@ public class GamePlayManager : NetworkBehaviour
         }
 
         cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero)); cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero)); cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
         cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
 
@@ -926,7 +974,7 @@ public class GamePlayManager : NetworkBehaviour
     private IEnumerator StartPeekingPhase()
     {
         isPeekingPhase = true;
-
+        ShowTooltipOverlay("The Goal of this game is to have the lowest card values in your hands! Start by looking at your LEFT and RIGHT hand cards!");
         int localPlayerIndex = 0;
         var myCards = players[localPlayerIndex].cardsPanel.cards;
         players[localPlayerIndex].ShowMessage("Peek Time", false, peekTime);
@@ -1281,6 +1329,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         foreach (var p in players)
             p.OnTurnEnd();
+        HideTooltipOverlay();
     }
 
     public void NextPlayerTurn()
@@ -1484,7 +1533,7 @@ public class GamePlayManager : NetworkBehaviour
 
     private IEnumerator WaitThenAdvanceBotTurn()
     {
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(2.5f);
         EndTurnAndGoNextPlayer();
     }
 
@@ -1559,7 +1608,7 @@ public class GamePlayManager : NetworkBehaviour
 
         ulong currentTurnClientId = seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)];
         turnEndedByTimeout = true;
-        ShowTimeoutMessageClientRpc(currentPlayerIndex);
+        ShowTimeoutMessageClientRpc(GetGlobalIndexFromLocal(currentPlayerIndex));
 
         if (peekedCardsByClientId.ContainsKey(currentTurnClientId))
         {
@@ -1649,6 +1698,9 @@ public class GamePlayManager : NetworkBehaviour
         if (hasPeekedCard) return;
         if (cardDeckTransform.childCount == 0) return;
 
+        if (arrowObject) arrowObject.SetActive(false);
+        if (arrowObject2) arrowObject2.SetActive(false);
+
         peekedDeckIndex = cards.Count - 1;
 
         Transform topCardTf = cardDeckTransform.GetChild(cardDeckTransform.childCount - 1);
@@ -1678,6 +1730,13 @@ public class GamePlayManager : NetworkBehaviour
         if (!IsHost || (IsHost && !NetworkManager.Singleton.IsServer))
             NotifyHostPeekedCardServerRpc((int)card.Type, (int)card.Value);
     }
+
+    public void NotifyWasteInteractionStarted()
+    {
+        wasteInteractionStarted = true;
+        if (arrowObject2) arrowObject2.SetActive(false);
+    }
+
 
     [ServerRpc(RequireOwnership = false)]
     public void NotifyHostPeekedCardServerRpc(int cardType, int cardValue, ServerRpcParams rpcParams = default)
@@ -1883,6 +1942,7 @@ public class GamePlayManager : NetworkBehaviour
                         Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                     }
                 );
+                return;
             }
             return;
         }
@@ -1990,6 +2050,7 @@ public class GamePlayManager : NetworkBehaviour
                         Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
                     }
                 );
+                return;
             }
             return;
         }
@@ -2043,6 +2104,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Fiend.Instance.ShowFiendPopup();
+        ShowTooltipOverlay("Fiend: Pick a player to Jumble his cards!");
     }
 
     [ClientRpc]
@@ -2050,6 +2112,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Queen.Instance.StartQueenSwap();
+        ShowTooltipOverlay("Queen Power: Pick 2 cards to Swop!");
     }
 
     [ClientRpc]
@@ -2057,6 +2120,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         King.Instance.StartKingPhase();
+        ShowTooltipOverlay("King Power: Pick a card to Kill!");
     }
 
     [ClientRpc]
@@ -2178,13 +2242,13 @@ public class GamePlayManager : NetworkBehaviour
 
     [ClientRpc]
     public void ReplaceHandCardClientRpc(
-     int playerIndex,
-     int handIndex,
-     SerializableCard newCard,
-     SerializableCard waste,
-     SerializableCard[] deck,
-     SerializableCard[] wastePile,
-     bool fromWastePile)
+    int playerIndex,
+    int handIndex,
+    SerializableCard newCard,
+    SerializableCard waste,
+    SerializableCard[] deck,
+    SerializableCard[] wastePile,
+    bool fromWastePile)
     {
         if (isKingRefillPhase) return;
 
@@ -2195,77 +2259,55 @@ public class GamePlayManager : NetworkBehaviour
             if (prevCard != null && prevCard.specialOutline != null)
                 prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
         }
+
         int localSeat = GetLocalIndexFromGlobal(playerIndex);
         var p = players[localSeat];
+        if (p == null) return;
 
-        Vector3 handSlotPos = p.cardsPanel.cards[handIndex].transform.position;
-        Card cardToRemove = p.cardsPanel.cards[handIndex];
-        p.cardsPanel.cards[handIndex] = null;
-        Destroy(cardToRemove.gameObject);
+        Card oldCard = p.cardsPanel.cards[handIndex];
+        if (oldCard == null) return;
 
-        // Animate waste card flying to waste pile
-        var wasteObj = Instantiate(_cardPrefab, handSlotPos, Quaternion.identity, cardWastePile.transform.parent);
-        wasteObj.Type = waste.Type;
-        wasteObj.Value = waste.Value;
-        wasteObj.IsOpen = true;
-        wasteObj.CalcPoint();
+        Vector3 slotLocalPos = oldCard.transform.localPosition;
+        Quaternion slotLocalRot = oldCard.transform.localRotation;
+        Vector3 slotLocalScale = oldCard.transform.localScale;
 
-        var wp = wasteObj.gameObject.AddComponent<WastePile>();
-        wp.Initialize(wasteObj);
-        RefreshWasteInteractivity();
-        float randomRot = Random.Range(-50, 50f);
-        StartCoroutine(AnimateCardMove(wasteObj, handSlotPos, cardWastePile.transform.position, 0.5f, randomRot));
+        Vector3 slotWorldPos = oldCard.transform.position;
+        Vector3 fromWorld = (fromWastePile ? cardWastePile.transform.position : cardDeckTransform.position);
 
-        Vector3 fromPos = fromWastePile ? cardWastePile.transform.position : cardDeckTransform.position;
-        GameObject newCardGO = Instantiate(_cardPrefab.gameObject, fromPos, Quaternion.identity, p.cardsPanel.transform.parent);
-        Card newCardVisual = newCardGO.GetComponent<Card>();
-        newCardVisual.Type = newCard.Type;
-        newCardVisual.Value = newCard.Value;
+        oldCard.IsClickable = false;
+        oldCard.onClick = null;
+        oldCard.IsOpen = true;
+        oldCard.transform.SetParent(AnimRoot, true);
 
-        if (fromWastePile) newCardVisual.IsOpen = true;
-        else newCardVisual.IsOpen = p.isUserPlayer;
-        newCardVisual.CalcPoint();
+        StartCoroutine(_FlyOldToWaste(oldCard, slotWorldPos));
+
+        Card incoming = Instantiate(_cardPrefab, AnimRoot).GetComponent<Card>();
+        incoming.Type = newCard.Type;
+        incoming.Value = newCard.Value;
+        incoming.IsOpen = fromWastePile ? true : p.isUserPlayer;
+        incoming.CalcPoint();
+        incoming.IsClickable = false;
+        incoming.onClick = null;
 
         UpdateDeckVisualLocal(deck);
 
-        float animDuration = fromWastePile ? 0.8f : 0.5f;
+        float dur = fromWastePile ? 0.8f : 0.5f;
 
-        StartCoroutine(AnimateHandCardReplace(
-            p, handIndex, newCardVisual, newCardGO, fromPos, handSlotPos, animDuration, playerIndex, fromWastePile
+        p.cardsPanel.cards[handIndex] = null;
+
+        StartCoroutine(FlyAndAdoptToSlot(
+            incoming,
+            fromWorld,
+            p, handIndex,
+            slotLocalPos, slotLocalRot, slotLocalScale,
+            dur
         ));
 
         ShowReplacedMessageClientRpc(playerIndex);
         DisableUnoBtn();
-        if (turnEndedByTimeout)
-        {
-            turnEndedByTimeout = false;
-            return;
-        }
+
+        if (turnEndedByTimeout) { turnEndedByTimeout = false; return; }
         CardGameManager.PlaySound(normal_click);
-    }
-
-    IEnumerator AnimateHandCardReplace(Player2 p, int handIndex, Card newCardVisual, GameObject newCardGO,
-    Vector3 fromPos, Vector3 handSlotPos, float animDuration, int playerIndex, bool fromWastePile)
-    {
-        yield return StartCoroutine(AnimateCardMove(newCardVisual, fromPos, handSlotPos, animDuration));
-        Destroy(newCardGO, 0.01f);
-
-        p.AddSerializableCard(new SerializableCard(newCardVisual.Type, newCardVisual.Value), handIndex);
-
-        yield return null;
-
-        if (IsServer)
-            PlayDrawCardSoundClientRpc();
-
-        Card c = p.cardsPanel.cards[handIndex];
-        if (c != null)
-            c.FlashMarkedOutline();
-
-        float flashDuration = 2f;
-        yield return new WaitForSeconds(flashDuration);
-
-        if (c != null)
-            c.IsOpen = false;
 
         if (IsHost && cards.Count == 0)
         {
@@ -2276,16 +2318,32 @@ public class GamePlayManager : NetworkBehaviour
 
         if (IsHost)
         {
-            // Only advance here if not a bot!
             var playerList = MultiplayerManager.Instance.playerDataNetworkList;
-            int globalIndex = playerIndex;
-            bool isBot = (globalIndex >= 0 && globalIndex < playerList.Count && playerList[globalIndex].clientId >= 9000);
-
-            if (!isBot)
-            {
-                StartCoroutine(DelayedNextPlayerTurn(0f));
-            }
+            bool isBot = (playerIndex >= 0 && playerIndex < playerList.Count && playerList[playerIndex].clientId >= 9000);
+            if (!isBot) StartCoroutine(DelayedNextPlayerTurn(2.5f));
         }
+    }
+
+    private IEnumerator _FlyOldToWaste(Card oldCard, Vector3 fromWorld)
+    {
+        if (oldCard == null) yield break;
+
+        Vector3 wasteWorld = cardWastePile.transform.position;
+        float wasteDur = 0.5f;
+        float randomRot = Random.Range(-50f, 50f);
+        yield return StartCoroutine(FlyWorld(oldCard.transform, fromWorld, wasteWorld, wasteDur, Quaternion.Euler(0, 0, randomRot)));
+
+        if (oldCard == null) yield break;
+
+        oldCard.transform.SetParent(cardWastePile.transform, true);
+        oldCard.transform.SetAsLastSibling();
+
+        var wp = oldCard.GetComponent<WastePile>();
+        if (wp == null) wp = oldCard.gameObject.AddComponent<WastePile>();
+        wp.Initialize(oldCard);
+
+        RefreshWasteInteractivity();
+        if (IsServer) PlayDrawCardSoundClientRpc();
     }
 
     void DisableAllHandCardGlow()
@@ -2612,11 +2670,6 @@ public class GamePlayManager : NetworkBehaviour
         DisableAllHandCardGlowAllPlayers();
 
         DisableDeckClickability();
-        RefreshWasteInteractivity();
-
-        if (peekedCard != null) peekedCard.IsOpen = false;
-        peekedCard = null;
-        hasPeekedCard = false;
 
         if (unoBtn != null)
         {
@@ -2640,6 +2693,16 @@ public class GamePlayManager : NetworkBehaviour
         {
             Queen.Instance.isQueenSwapPhase = false;
         }
+
+        if (peekedCard != null && cardDeckTransform != null &&
+        peekedCard.transform.IsChildOf(cardDeckTransform))
+        {
+            peekedCard.IsOpen = false;
+        }
+        peekedCard = null;
+        hasPeekedCard = false;
+
+        RefreshWasteInteractivity();
     }
 
     [ClientRpc]
@@ -2725,6 +2788,133 @@ public class GamePlayManager : NetworkBehaviour
             if (clip != null)
                 _audioSource.PlayOneShot(clip, p2.emojiSfxVolume);
         }
+    }
+
+    private IEnumerator FlyWorld(Transform t, Vector3 from, Vector3 to, float duration, Quaternion? endRot = null)
+    {
+        if (t == null) yield break;
+        float elapsed = 0f;
+        Quaternion r0 = t.rotation;
+        Quaternion r1 = endRot ?? t.rotation;
+
+        while (elapsed < duration)
+        {
+            if (t == null) yield break;
+            float k = elapsed / duration;
+            t.position = Vector3.Lerp(from, to, k);
+            t.rotation = Quaternion.Slerp(r0, r1, k);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (t == null) yield break;
+        t.position = to;
+        t.rotation = r1;
+    }
+
+    private IEnumerator FlyAndAdoptToSlot(
+        Card incoming,
+        Vector3 fromWorld,
+        Player2 p, int handIndex,
+        Vector3 slotLocalPos, Quaternion slotLocalRot, Vector3 slotLocalScale,
+        float duration)
+    {
+        if (incoming == null || p == null) yield break;
+
+        // fly in neutral space
+        var originalParent = incoming.transform.parent;
+        incoming.transform.SetParent(AnimRoot, true);
+        incoming.transform.position = fromWorld;
+
+        // where to land (world)
+        Vector3 toWorld = p.cardsPanel.transform.TransformPoint(slotLocalPos);
+
+        yield return StartCoroutine(FlyWorld(incoming.transform, fromWorld, toWorld, duration));
+
+        incoming.transform.SetParent(p.cardsPanel.transform, false);
+        incoming.transform.localPosition = slotLocalPos;
+        incoming.transform.localRotation = slotLocalRot;
+        incoming.transform.localScale = slotLocalScale;
+
+        if (handIndex >= 0 && handIndex < p.cardsPanel.cards.Count)
+            p.cardsPanel.cards[handIndex] = incoming;
+
+        incoming.FlashMarkedOutline();
+        if (IsServer) PlayDrawCardSoundClientRpc();
+
+        yield return new WaitForSeconds(2f);
+        incoming.IsOpen = false;
+    }
+
+    public void ShowTooltipOverlay(string text)
+    {
+        if (!CardGameManager.ShowTooltips) return;
+        if (tooltipParent == null || tooltipText == null) return;
+
+        tooltipText.text = text;
+        tooltipParent.SetActive(true);
+        tooltipParent.transform.SetAsLastSibling();
+
+        if (tooltipCanvasGroup == null)
+            tooltipCanvasGroup = tooltipParent.GetComponent<CanvasGroup>();
+
+        if (tooltipFadeRoutine != null) StopCoroutine(tooltipFadeRoutine);
+        tooltipFadeRoutine = StartCoroutine(FadeTooltip(1f));
+    }
+
+    public void HideTooltipOverlay()
+    {
+        if (tooltipParent == null) return;
+
+        if (tooltipCanvasGroup == null)
+            tooltipCanvasGroup = tooltipParent.GetComponent<CanvasGroup>();
+
+        if (tooltipFadeRoutine != null) StopCoroutine(tooltipFadeRoutine);
+        tooltipFadeRoutine = StartCoroutine(FadeTooltip(0f, () =>
+        {
+            tooltipParent.SetActive(false);
+        }));
+    }
+
+    private IEnumerator FadeTooltip(float targetAlpha, System.Action onComplete = null)
+    {
+        float startAlpha = tooltipCanvasGroup.alpha;
+        float time = 0f;
+
+        while (time < fadeDuration)
+        {
+            time += Time.deltaTime;
+            tooltipCanvasGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, time / fadeDuration);
+            yield return null;
+        }
+
+        tooltipCanvasGroup.alpha = targetAlpha;
+        onComplete?.Invoke();
+    }
+
+    private void WireTooltipClickToClose()
+    {
+        if (tooltipParent == null) return;
+
+
+        // Hook: click anywhere on dimmed bg to close
+        if (tooltipDimmedButton != null)
+        {
+            tooltipDimmedButton.transition = Selectable.Transition.None;
+            tooltipDimmedButton.onClick.RemoveAllListeners();
+            tooltipDimmedButton.onClick.AddListener(HideTooltipOverlay);
+        }
+
+        // Hook: clicking the popup itself also closes
+        if (tooltipPopupButton != null)
+        {
+            tooltipPopupButton.transition = Selectable.Transition.None;
+            tooltipPopupButton.onClick.RemoveAllListeners();
+            tooltipPopupButton.onClick.AddListener(HideTooltipOverlay);
+        }
+
+        if (tooltipDimmedButton == null && tooltipPopupButton == null)
+            Debug.LogWarning("[Tooltip] No click targets assigned/found. Assign Dimed/Popup Buttons in the Inspector.");
     }
 
 }

@@ -15,6 +15,8 @@ public class CharacterSelectUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI readyButtonText;
     [SerializeField] private Button addBotButton;
     [SerializeField] private Button addSuperbotButton;
+    [SerializeField] private Toggle tooltipsToggle;
+    [SerializeField] private Button tooltipsToggleParent;
 
     public static CharacterSelectUI Instance { get; private set; }
 
@@ -55,11 +57,33 @@ public class CharacterSelectUI : MonoBehaviour
             Loader.Load(Loader.Scene.HomeScene);
         });
 
-
         readyButton.onClick.AddListener(() => {
             CharacterSelectReady.Instance.ToggleReady();
         });
 
+        if (tooltipsToggle != null)
+        {
+            tooltipsToggle.onValueChanged.RemoveAllListeners();
+
+            tooltipsToggle.SetIsOnWithoutNotify(CardGameManager.ShowTooltips);
+
+            tooltipsToggle.onValueChanged.AddListener(isOn =>
+            {
+                CardGameManager.SetShowTooltips(isOn);
+            });
+        }
+
+        // if clicked the tooltip parent, toggle the toggle
+        if (tooltipsToggleParent != null)
+        {
+            tooltipsToggleParent.onClick.AddListener(() =>
+            {
+                if (tooltipsToggle != null)
+                {
+                    tooltipsToggle.isOn = !tooltipsToggle.isOn;
+                }
+            });
+        }
     }
 
     private void Start()
@@ -143,8 +167,6 @@ public class CharacterSelectUI : MonoBehaviour
         yield return null; // Wait one frame so the object becomes active
         playerUI.SetPlayer(clientId);
     }
-
-
 
     private void OnDestroy()
     {

@@ -79,6 +79,8 @@ public class WastePile : MonoBehaviour
             return;
         }
 
+        GamePlayManager.instance?.NotifyWasteInteractionStarted();
+
         isChoosing = true;
         GamePlayManager.instance.wasteInteractionStarted = true;
 
@@ -96,7 +98,7 @@ public class WastePile : MonoBehaviour
             handCard.onClick = (c) => OnHandCardClicked(index, c);
         }
 
-        GamePlayManager.instance.StartCoroutine(WaitForHandCardClickTimeout());
+        GamePlayManager.instance.StartCoroutine(WasteSelectionGuard());
 
         GamePlayManager.instance.peekedCard = wasteCard;
         GamePlayManager.instance.hasPeekedCard = true;
@@ -135,21 +137,12 @@ public class WastePile : MonoBehaviour
         GamePlayManager.instance.RequestWasteCardSwapServerRpc(index, newCard, replacedCard);
     }
 
-
-
-    private IEnumerator WaitForHandCardClickTimeout()
+    private IEnumerator WasteSelectionGuard()
     {
-        yield return new WaitForSeconds(6f);
-        if (!isChoosing) yield break;
+        while (isChoosing && GamePlayManager.instance.turnTimerLeft > 0f)
+            yield return null;
 
-        isChoosing = false;
-        if (wasteCard != null)
-            wasteCard.transform.localScale = originalScale;
-
-        DisableHandGlow();
-        GamePlayManager.instance.EndTurnForAllClientRpc();
-        if (NetworkManager.Singleton.IsServer)
-            GamePlayManager.instance.NextPlayerTurn();
+        if (isChoosing) CancelChoosing();
     }
 
     private void DisableHandGlow()

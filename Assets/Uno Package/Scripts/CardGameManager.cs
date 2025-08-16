@@ -14,6 +14,22 @@ public class CardGameManager : MonoBehaviour
     private static int? _cachedAvatarIndex;
 
     private static bool initialized = false;
+    private const string PP_TOOLTIPS = "tooltips_on";
+
+    public static bool ShowTooltips { get; private set; } = false;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void InitPrefs()
+    {
+        ShowTooltips = PlayerPrefs.GetInt(PP_TOOLTIPS, 0) == 1;
+    }
+
+    public static void SetShowTooltips(bool on)
+    {
+        ShowTooltips = on;
+        PlayerPrefs.SetInt(PP_TOOLTIPS, on ? 1 : 0);
+        PlayerPrefs.Save();
+    }
 
     void Awake()
     {

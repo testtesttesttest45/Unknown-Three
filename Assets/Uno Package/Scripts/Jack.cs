@@ -25,6 +25,9 @@ public class Jack : NetworkBehaviour
     private int _powerEpoch = 0;
     private ulong _powerUserClientId = ulong.MaxValue;
     private AudioSource _voChannel;
+    private const float JACK_EXPOSE_EXTRA = 2f;
+    private const float GOLDEN_JACK_EXPOSE_EXTRA = 2f;
+    private readonly Dictionary<Player2, int> _timerExposeEpoch = new Dictionary<Player2, int>();
 
     private GamePlayManager gpm => GamePlayManager.instance;
 
@@ -77,7 +80,7 @@ public class Jack : NetworkBehaviour
     {
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
         if (!gpm.IsMyTurn() || !gpm.players[0].isUserPlayer) return;
-
+        gpm.ShowTooltipOverlay("Jack Power: Pick a card to Reveal!");
         isJackRevealPhase = true;
 
         for (int seat = 0; seat < gpm.players.Count; seat++)
@@ -232,13 +235,23 @@ public class Jack : NetworkBehaviour
             var allRealClientIds = gpm.GetAllHumanClientIds();
             if (allRealClientIds.Count > 0)
             {
+                float extra = 0f;
+                if (Mathf.Approximately(voLen, JACK_VO_LEN))
+                    extra = JACK_EXPOSE_EXTRA;
+                else if (Mathf.Approximately(voLen, GOLDEN_JACK_VO_LEN))
+                    extra = GOLDEN_JACK_EXPOSE_EXTRA;
+
+                float exposeSeconds = EXPOSE_VO_LEN + extra;
+
                 StartExposeEffectClientRpc(
                     gpm.GetGlobalIndexFromLocal(zeroHolderPlayerIndex),
                     voLen,
+                    exposeSeconds,
                     new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = allRealClientIds } }
                 );
+
+                yield return new WaitForSeconds(exposeSeconds);
             }
-            yield return new WaitForSeconds(EXPOSE_VO_LEN);
 
             if (epoch != _powerEpoch) { _exposeGateCo = null; yield break; }
         }
@@ -247,15 +260,23 @@ public class Jack : NetworkBehaviour
         OnJackRevealDoneServerRpc();
     }
 
-    private IEnumerator RestoreTimerEffectAfterDelay(Player2 player, float delay)
+    private IEnumerator RestoreTimerEffectAfterDelay(Player2 player, float delay, int epoch)
     {
         yield return new WaitForSeconds(delay);
+
+        // If a newer expose started for this player, abort this older restore
+        if (_timerExposeEpoch.TryGetValue(player, out var currentEpoch) && currentEpoch != epoch)
+            yield break;
+
         if (player?.timerOjbect != null)
         {
             var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
             if (img != null) img.color = new Color(0.572f, 0.463f, 0.125f, 1f); // #927620
             player.timerOjbect.SetActive(false);
         }
+
+        // clean up
+        _timerExposeEpoch.Remove(player);
     }
 
     [ClientRpc]
@@ -317,6 +338,7 @@ public class Jack : NetworkBehaviour
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
         if (!gpm.IsMyTurn() || !gpm.players[0].isUserPlayer) return;
 
+        gpm.ShowTooltipOverlay("Golden Jack Power: Pick a card to Reveal!");
         isGoldenJackRevealPhase = true;
 
         for (int seat = 0; seat < gpm.players.Count; seat++)
@@ -523,12 +545,12 @@ public class Jack : NetworkBehaviour
     }
 
     [ClientRpc]
-    void StartExposeEffectClientRpc(int globalZeroHolderIndex, float baseVoLen, ClientRpcParams rpcParams = default)
+    void StartExposeEffectClientRpc(int globalZeroHolderIndex, float baseVoLen, float exposeSeconds, ClientRpcParams rpcParams = default)
     {
-        StartCoroutine(StartExposeEffectLocal(globalZeroHolderIndex, baseVoLen));
+        StartCoroutine(StartExposeEffectLocal(globalZeroHolderIndex, baseVoLen, exposeSeconds));
     }
 
-    private IEnumerator StartExposeEffectLocal(int globalZeroHolderIndex, float baseVoLen)
+    private IEnumerator StartExposeEffectLocal(int globalZeroHolderIndex, float baseVoLen, float exposeSeconds)
     {
         float waited = 0f;
         float killAfter = Mathf.Max(0.1f, baseVoLen + 0.2f);
@@ -552,7 +574,14 @@ public class Jack : NetworkBehaviour
                 player.timerOjbect.SetActive(true);
                 var img = player.timerOjbect.GetComponent<UnityEngine.UI.Image>();
                 if (img != null) img.color = Color.red;
-                StartCoroutine(RestoreTimerEffectAfterDelay(player, EXPOSE_VO_LEN));
+
+                // NEW: bump epoch and pass it
+                int epoch = (_timerExposeEpoch.TryGetValue(player, out var e) ? e : 0) + 1;
+                _timerExposeEpoch[player] = epoch;
+                StartCoroutine(RestoreTimerEffectAfterDelay(player, exposeSeconds, epoch));
+
+                player.ShowMessage("Zero detected", true, Mathf.Min(exposeSeconds, 1.5f));
+                if (gpm.exposed != null) gpm._audioSource.PlayOneShot(gpm.exposed, 0.2f);
             }
         }
 

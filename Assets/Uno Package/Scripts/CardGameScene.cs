@@ -9,18 +9,42 @@ public class CardGameScene : MonoBehaviour
     public static CardGameScene instance;
     public Popup menuPopup, exitPopup;
     public Toggle menuSfxToggle;
+    public Toggle menuTooltipsToggle;
 
     void Awake()
     {
         instance = this;
         Time.timeScale = 1f;
-        menuSfxToggle.isOn = CardGameManager.IsSound;
-        menuSfxToggle.onValueChanged.RemoveAllListeners();
-        menuSfxToggle.onValueChanged.AddListener((arg0) =>
+
+        if (menuSfxToggle != null)
         {
-            CardGameManager.PlayButton();
-            CardGameManager.IsSound = arg0;
-        });
+            menuSfxToggle.onValueChanged.RemoveAllListeners();
+            menuSfxToggle.SetIsOnWithoutNotify(CardGameManager.IsSound);
+            menuSfxToggle.onValueChanged.AddListener(on =>
+            {
+                CardGameManager.IsSound = on;
+                CardGameManager.PlayButton();
+            });
+        }
+        else
+        {
+            Debug.LogWarning("[CardGameScene] menuSfxToggle not assigned.");
+        }
+
+        if (menuTooltipsToggle != null)
+        {
+            menuTooltipsToggle.onValueChanged.RemoveAllListeners();
+            menuTooltipsToggle.SetIsOnWithoutNotify(CardGameManager.ShowTooltips);
+            menuTooltipsToggle.onValueChanged.AddListener(on =>
+            {
+                CardGameManager.SetShowTooltips(on);
+                GamePlayManager.instance?.HideTooltipOverlay();
+            });
+        }
+        else
+        {
+            Debug.LogWarning("[CardGameScene] menuTooltipsToggle not assigned.");
+        }
     }
 
     private IEnumerator Start()
@@ -135,4 +159,12 @@ public class CardGameScene : MonoBehaviour
         UnityEngine.SceneManagement.SceneManager.LoadScene("HomeScene");
     }
 
+    void OnTooltipsToggleChanged(bool on)
+    {
+        CardGameManager.SetShowTooltips(on);
+
+        if (!on) GamePlayManager.instance?.HideTooltipOverlay();
+
+        CardGameManager.PlayButton();
+    }
 }

@@ -264,8 +264,8 @@ public class King : NetworkBehaviour
     {
         if (gpm._audioSource != null)
         {
-            if (gpm.goodKill != null) gpm._audioSource.PlayOneShot(gpm.goodKill, 0.95f);
-            if (gpm.goodKillEnhanced != null) gpm._audioSource.PlayOneShot(gpm.goodKillEnhanced, 0.95f);
+            if (gpm.goodKill != null) gpm._audioSource.PlayOneShot(gpm.goodKill, 1.2f);
+            if (gpm.goodKillEnhanced != null) gpm._audioSource.PlayOneShot(gpm.goodKillEnhanced, 0.9f);
         }
         if (gpm.spotlightPanel) gpm.spotlightPanel.SetActive(true);
         if (gpm.spotlightConfetti)
@@ -279,8 +279,16 @@ public class King : NetworkBehaviour
         if (gpm.spotlight) gpm.spotlight.SetActive(true);
         RotateSpotlightToSeat(killerLocalSeat);
         MaskOnlyKillerBG_NoLayoutShift(killerLocalSeat);
+
+        for (int i = 0; i < gpm.players.Count; i++)
+        {
+            var trophy = GetTrophyForSeat(i);
+            if (trophy) trophy.SetActive(i == killerLocalSeat);
+        }
+
         gpm.StartCoroutine(HideZeroSpotlightAfterDelay());
     }
+
 
     [ClientRpc]
     private void KingKillCardClientRpc(int globalSeat, int cardIndex, int killerGlobalSeat)
@@ -296,7 +304,7 @@ public class King : NetworkBehaviour
 
         if (killed.Value == CardValue.One && killerGlobalSeat != globalSeat && gpm._audioSource != null)
         {
-            if (gpm.goodKill != null) gpm._audioSource.PlayOneShot(gpm.goodKill, 0.95f);
+            if (gpm.goodKill != null) gpm._audioSource.PlayOneShot(gpm.goodKill, 1.2f);
             if (gpm.special_click != null) gpm._audioSource.PlayOneShot(gpm.special_click, 1.0f);
         }
 
@@ -641,9 +649,19 @@ public class King : NetworkBehaviour
         if (gpm.spotlightPanel != null) gpm.spotlightPanel.SetActive(false);
         if (gpm.spotlight != null) gpm.spotlight.SetActive(false);
 
+        if (gpm?.players != null)
+        {
+            for (int i = 0; i < gpm.players.Count; i++)
+            {
+                var trophy = GetTrophyForSeat(i);
+                if (trophy) trophy.SetActive(false);
+            }
+        }
+
         ResumePausedParticles();
         RestoreBGs();
     }
+
 
     private Transform FindChildRecursive(Transform root, string name)
     {
@@ -720,5 +738,14 @@ public class King : NetworkBehaviour
         _disabledParticleGOsDuringSpotlight.Clear();
     }
 
+    private GameObject GetTrophyForSeat(int localSeat)
+    {
+        if (gpm?.players == null || localSeat < 0 || localSeat >= gpm.players.Count) return null;
+        var p = gpm.players[localSeat];
+        if (p == null) return null;
+
+        if (p.TrophyBackground != null) return p.TrophyBackground;
+        return p.TrophyBackground;
+    }
 
 }

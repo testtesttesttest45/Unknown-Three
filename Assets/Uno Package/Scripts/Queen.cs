@@ -271,35 +271,42 @@ public class Queen : NetworkBehaviour
 
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) yield break;
 
-        var candidates = new List<(int seat, int cardIndex)>();
+        // Build per-seat card lists
+        var seatToCards = new List<int>[gpm.players.Count];
+        var seatsWithCards = new List<int>();
+
         for (int seat = 0; seat < gpm.players.Count; seat++)
         {
             var p = gpm.players[seat];
             if (p?.cardsPanel?.cards == null) continue;
 
+            seatToCards[seat] = new List<int>();
             for (int i = 0; i < p.cardsPanel.cards.Count; i++)
-            {
                 if (p.cardsPanel.cards[i] != null)
-                    candidates.Add((seat, i));
-            }
+                    seatToCards[seat].Add(i);
+
+            if (seatToCards[seat].Count > 0)
+                seatsWithCards.Add(seat);
         }
 
-        if (candidates.Count < 2) yield break;
+        // Need at least two different players
+        if (seatsWithCards.Count < 2) yield break;
 
-        int a = Random.Range(0, candidates.Count);
-        int b;
-        do { b = Random.Range(0, candidates.Count); } while (b == a);
+        int seatA = seatsWithCards[Random.Range(0, seatsWithCards.Count)];
+        int seatB;
+        do { seatB = seatsWithCards[Random.Range(0, seatsWithCards.Count)]; } while (seatB == seatA);
 
-        var first = candidates[a];
-        var second = candidates[b];
+        int cardA = seatToCards[seatA][Random.Range(0, seatToCards[seatA].Count)];
+        int cardB = seatToCards[seatB][Random.Range(0, seatToCards[seatB].Count)];
 
-        int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(first.seat);
-        int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(second.seat);
+        int firstGlobalSeat = gpm.GetGlobalIndexFromLocal(seatA);
+        int secondGlobalSeat = gpm.GetGlobalIndexFromLocal(seatB);
 
         RequestQueenSwapServerRpc(
-            firstGlobalSeat, first.cardIndex,
-            secondGlobalSeat, second.cardIndex,
+            firstGlobalSeat, cardA,
+            secondGlobalSeat, cardB,
             new ServerRpcParams { Receive = new ServerRpcReceiveParams { SenderClientId = botClientId } }
         );
     }
+
 }
