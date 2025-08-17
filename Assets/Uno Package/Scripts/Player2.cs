@@ -230,10 +230,13 @@ public class Player2 : MonoBehaviour
         foreach (var c in cardsPanel.cards)
         {
             if (c == null) continue;
-            if (c.Value >= CardValue.Zero && c.Value <= CardValue.Ten)
-                points += (int)c.Value;
-            else // J, Q, K, Fiend, Skip, Golden Jack
-                points += 10;
+
+            int basePts = (c.Value >= CardValue.Zero && c.Value <= CardValue.Ten)
+                            ? (int)c.Value
+                            : 10;
+
+            bool doubled = c.IsCursed && c.Value != CardValue.Nemesis; // Nemesis never doubles
+            points += doubled ? (basePts * 2) : basePts;
         }
         return points;
     }

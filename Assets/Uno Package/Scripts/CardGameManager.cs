@@ -201,10 +201,11 @@ public enum CardType
     Green,  // 2 → Number_3
     Blue,   // 3 → Number_4
     Purple, // 4 → Number_5
-    Other
+    Gold,
+    AntiMatter,
 }
 
 public enum CardValue
 {
-    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend, GoldenJack
+    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend, GoldenJack, Nemesis
 }

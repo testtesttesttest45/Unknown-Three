@@ -127,8 +127,13 @@ public class Jack : NetworkBehaviour
     IEnumerator HideCardAfterDelay(Card card, float delay)
     {
         yield return new WaitForSeconds(delay);
-        if (card != null) card.IsOpen = false;
+        if (card != null)
+        {
+            card.IsOpen = false;
+            card.UpdateCursedOutlineActive();
+        }
     }
+
 
     [ClientRpc]
     void RevealHandCardClientRpc(

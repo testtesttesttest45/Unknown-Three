@@ -22,6 +22,9 @@ public class Card : MonoBehaviour, IPointerClickHandler
     private Coroutine flashMarkedRoutine;
     public GameObject eyeOutline;
     public GameObject specialOutline;
+    public GameObject cursedOutline;
+    private bool _isCursed = false;
+    public bool IsCursed => _isCursed;
 
     [Space(20)]
     public Text label1;
@@ -90,7 +93,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
         string spritePath = "Cards/BlankCard";
 
         // GOLDEN ZERO (already done)
-        if (Type == CardType.Other && Value == CardValue.Zero)
+        if (Type == CardType.Gold && Value == CardValue.Zero)
         {
             if (IsOpen)
             {
@@ -117,8 +120,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
             if (markedOutline != null) markedOutline.SetActive(false);
             if (eyeOutline != null) eyeOutline.SetActive(false);
         }
-        // GOLDEN JACK (NEW)
-        else if (Type == CardType.Other && Value == CardValue.GoldenJack)
+        else if (Type == CardType.Gold && Value == CardValue.GoldenJack)
         {
             if (IsOpen)
             {
@@ -144,6 +146,30 @@ public class Card : MonoBehaviour, IPointerClickHandler
             if (killedOutline != null) killedOutline.SetActive(false);
             if (markedOutline != null) markedOutline.SetActive(false);
             if (eyeOutline != null) eyeOutline.SetActive(false);
+        }
+        else if (Type == CardType.AntiMatter && Value == CardValue.Nemesis)
+        {
+            if (IsOpen)
+            {
+                spritePath = "Cards/AntiMatter";
+                txt = "N";
+                label1.color = Color.white;
+                label2.color = Color.white;
+                label3.color = Color.white;
+                label1.text = txt;
+                label2.text = txt;
+                label3.text = txt;
+            }
+            else
+            {
+                spritePath = "Cards/CardBack";
+                label1.text = label2.text = label3.text = "";
+            }
+            if (glowOutline != null) glowOutline.SetActive(false);
+            if (killedOutline != null) killedOutline.SetActive(false);
+            if (markedOutline != null) markedOutline.SetActive(false);
+            if (eyeOutline != null) eyeOutline.SetActive(false);
+            if (specialOutline != null) specialOutline.SetActive(false);
         }
         else
         {
@@ -196,7 +222,6 @@ public class Card : MonoBehaviour, IPointerClickHandler
                 label1.text = label2.text = label3.text = "";
             }
 
-            // Zero's outline is only for zero card!
             if (specialOutline != null)
                 specialOutline.SetActive(false);
         }
@@ -205,6 +230,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
         if (loadedSprite == null)
             loadedSprite = Resources.Load<Sprite>("Cards/BlankCard");
         GetComponent<Image>().sprite = loadedSprite;
+        UpdateCursedOutlineActive();
     }
 
 
@@ -318,6 +344,61 @@ public class Card : MonoBehaviour, IPointerClickHandler
         }
         eyeOutline.SetActive(false);
         flashEyeRoutine = null;
+    }
+
+    public void SetCursed(bool value)
+    {
+        _isCursed = value;
+        UpdateCursedOutlineActive();
+    }
+
+    public void UpdateCursedOutlineActive()
+    {
+        if (cursedOutline == null) return;
+        bool isNemesis = (Type == CardType.AntiMatter && Value == CardValue.Nemesis);
+        bool show = (isNemesis && IsOpen) || (_isCursed && IsOpen);
+        cursedOutline.SetActive(show);
+    }
+
+    // For the 2s confirmation flash when the power user curses a slot
+    private Coroutine flashCursedRoutine;
+    public void FlashCursedOutline(float duration = 2f, float pulseSpeed = 6f)
+    {
+        if (flashCursedRoutine != null)
+            StopCoroutine(flashCursedRoutine);
+        flashCursedRoutine = StartCoroutine(DoFlashCursedOutline(duration, pulseSpeed));
+    }
+
+    private IEnumerator DoFlashCursedOutline(float duration, float pulseSpeed)
+    {
+        if (cursedOutline == null) yield break;
+
+        cursedOutline.SetActive(true);
+        var outlineImg = cursedOutline.GetComponent<Image>();
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            if (outlineImg != null)
+            {
+                float alpha = Mathf.Abs(Mathf.Sin(elapsed * pulseSpeed));
+                var c = outlineImg.color;
+                c.a = alpha;
+                outlineImg.color = c;
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // restore rule-based visibility
+        if (outlineImg != null)
+        {
+            var c = outlineImg.color;
+            c.a = 1f;
+            outlineImg.color = c;
+        }
+        UpdateCursedOutlineActive();
+        flashCursedRoutine = null;
     }
 
 }

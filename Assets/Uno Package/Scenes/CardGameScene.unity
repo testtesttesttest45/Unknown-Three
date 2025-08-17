@@ -6515,6 +6515,7 @@ MonoBehaviour:
   wasteCards: []
   turnTimerDuration: 10
   turnTimerLeft: 0
+  isTurnEnding: 0
   deckInteractionLocked: 0
   isKingRefillPhase: 0
   peekedCard: {fileID: 0}
@@ -6523,6 +6524,7 @@ MonoBehaviour:
   queenVoiceClip: {fileID: 8300000, guid: ef5b9247c28d8494bb8ed0fddb1707db, type: 3}
   kingVoiceClip: {fileID: 8300000, guid: 0fd6193c4196b1546b1be55256fe2f0a, type: 3}
   fiendVoiceClip: {fileID: 8300000, guid: 286c292c9274ab34987e9ffb4f1a1f3e, type: 3}
+  nemesisVoiceClip: {fileID: 8300000, guid: 69ac61270eb6fe0408762435faa4c77d, type: 3}
   fiendRevengeVoiceClip: {fileID: 8300000, guid: f6c217894c7843d49994cfe6c7f9c372,
     type: 3}
   jackSpecialVoiceClip: {fileID: 8300000, guid: 182d4105501f18245b35e34c7171cb47,
@@ -6545,6 +6547,7 @@ MonoBehaviour:
   avatarKing: {fileID: 21300000, guid: 6754f70cdcf43e94ca6e7653464261e5, type: 3}
   avatarFiend: {fileID: 21300000, guid: 7d73bd58f2dd1e8429272734c5a7a28d, type: 3}
   avatarGoldenJack: {fileID: 21300000, guid: eb2287f75e6549f4897b31dcf2d38874, type: 3}
+  avatarNemesis: {fileID: 21300000, guid: bd46723da0727ba419edb1341ae21f2b, type: 3}
   specialAvatarDuration: 2
   currentPowerOwnerGlobalSeat: -1
   currentPowerValue: 0
@@ -41552,6 +41555,72 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1806446392
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1806446395}
+  - component: {fileID: 1806446394}
+  - component: {fileID: 1806446396}
+  m_Layer: 0
+  m_Name: NemesisManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1806446394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1806446392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 3500388038
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+--- !u!4 &1806446395
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1806446392}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1806446396
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1806446392}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77213f3d4eee9cc439ef58fead71230a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1828516994
 GameObject:
   m_ObjectHideFlags: 0
@@ -79197,6 +79266,7 @@ SceneRoots:
   - {fileID: 398830987}
   - {fileID: 510489859}
   - {fileID: 1541427275}
+  - {fileID: 1806446395}
   - {fileID: 235986504}
   - {fileID: 2044523291}
   - {fileID: 535607337}

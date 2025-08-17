@@ -57,7 +57,7 @@ public class GamePlayManager : NetworkBehaviour
     private Coroutine turnTimerCoroutine;
     public float turnTimerDuration = 10f;
     public float turnTimerLeft = 0f;
-    private bool isTurnEnding = false;
+    public bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
     public bool isKingRefillPhase = false;
 
@@ -70,6 +70,7 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip queenVoiceClip;
     public AudioClip kingVoiceClip;
     public AudioClip fiendVoiceClip;
+    public AudioClip nemesisVoiceClip;
     public AudioClip fiendRevengeVoiceClip;
     public AudioClip jackSpecialVoiceClip;
     public AudioClip goldenJackVoiceClip;
@@ -113,6 +114,7 @@ public class GamePlayManager : NetworkBehaviour
     public Sprite avatarKing;
     public Sprite avatarFiend;
     public Sprite avatarGoldenJack;
+    public Sprite avatarNemesis;
     [Tooltip("How long the power avatar stays before reverting")]
     public float specialAvatarDuration = 2f;
     private List<Sprite> baseAvatarSprites;
@@ -659,7 +661,6 @@ public class GamePlayManager : NetworkBehaviour
         yield return wheelUI.SpinTo(finalZ, duration);
     }
 
-
     private IEnumerator HostAfterWheelRoutine(float delay, int winnerGlobalSeat)
     {
         yield return new WaitForSeconds(delay + 0.05f);
@@ -695,21 +696,6 @@ public class GamePlayManager : NetworkBehaviour
 
         if (winnerCid >= 9000)
             StartCoroutine(RunBotTurn(winnerGlobalSeat));
-    }
-
-
-    [ClientRpc]
-    void AnnounceWheelWinnerClientRpc(int winnerGlobalSeat)
-    {
-        if (wheelUI == null) return;
-
-        ulong winnerCid = GetClientIdFromGlobalSeat(winnerGlobalSeat);
-        bool winnerIsBot = (winnerCid >= 9000);
-
-        ulong myId = NetworkManager.Singleton.LocalClientId;
-        int myGlobalSeat = seatOrderGlobal.IndexOf(myId);
-        bool iAmWinner = (myGlobalSeat == winnerGlobalSeat);
-
     }
 
     void BuildWheelVisualsLocal()
@@ -814,6 +800,7 @@ public class GamePlayManager : NetworkBehaviour
             case CardValue.King: s = avatarKing; break;
             case CardValue.Fiend: s = avatarFiend; break;
             case CardValue.GoldenJack: s = avatarGoldenJack; break;
+            case CardValue.Nemesis: s = avatarNemesis; break;
         }
         if (s == null) return;
 
@@ -877,7 +864,6 @@ public class GamePlayManager : NetworkBehaviour
         yield break;
     }
 
-
     public void EndAvatarForSeatFromServer(int globalSeat)
     {
         if (!IsHost) return;
@@ -928,9 +914,10 @@ public class GamePlayManager : NetworkBehaviour
             cards.Add(card);
         }
 
-        cards.Add(new SerializableCard(CardType.Other, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Other, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
 
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
@@ -1096,11 +1083,10 @@ public class GamePlayManager : NetworkBehaviour
         return turnCid == NetworkManager.Singleton.LocalClientId;
     }
 
-    public int GetPlayerIndexFromClientId(ulong clientId) // returns GLOBAL seat index
+    public int GetPlayerIndexFromClientId(ulong clientId)
     {
         return seatOrderGlobal.IndexOf(clientId);
     }
-
 
     public void NextPlayerIndex()
     {
@@ -1130,6 +1116,9 @@ public class GamePlayManager : NetworkBehaviour
         if (IsServer) _serverTurnResolved = false;
         if (Fiend.Instance != null)
             Fiend.Instance.HideFiendPopup();
+        turnTimerLeft = turnTimerDuration;
+        wasteInteractionStarted = false;
+        deckInteractionLocked = false;
         foreach (var p in players)
             p.wasTimeout = false;
         if (cards.Count == 0)
@@ -1231,8 +1220,8 @@ public class GamePlayManager : NetworkBehaviour
 
         wasteCards.Add(replacedCard);
 
-        ReplaceHandCardClientRpc(playerIndex, handIndex, newCard, replacedCard,
-            cards.ToArray(), wasteCards.ToArray(), true);
+        turnEndedByTimeout = false;
+        ReplaceHandCardClientRpc(playerIndex, handIndex, newCard, replacedCard, cards.ToArray(), wasteCards.ToArray(), true);
 
         RemoveTopWasteCardClientRpc();
 
@@ -1566,6 +1555,8 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void BroadcastTurnTimerClientRpc(float secondsLeft, float totalSeconds)
     {
+        turnTimerLeft = secondsLeft;
+
         for (int i = 0; i < players.Count; i++)
         {
             if (i == currentPlayerIndex)
@@ -1583,6 +1574,9 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void ResetTurnTimerClientRpc(int playerIndex, float totalSeconds)
     {
+        // NEW: prime local copy on all peers
+        turnTimerLeft = totalSeconds;
+
         for (int i = 0; i < players.Count; i++)
         {
             players[i].SetTimerVisible(i == playerIndex);
@@ -1622,7 +1616,9 @@ public class GamePlayManager : NetworkBehaviour
 
     public void UpdateDeckClickability()
     {
-        if (Jack.Instance.isJackRevealPhase || isPeekingPhase)
+        if ((Jack.Instance != null && Jack.Instance.isJackRevealPhase)
+        || isPeekingPhase
+        || (Nemesis.Instance != null && Nemesis.Instance.isNemesisPhase))
         {
             DisableDeckClickability();
             return;
@@ -1886,7 +1882,7 @@ public class GamePlayManager : NetworkBehaviour
         wasteCards.Add(drawn);
 
         if (drawn.Value == CardValue.Jack || drawn.Value == CardValue.Queen || drawn.Value == CardValue.King
-    || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack)
+    || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack || drawn.Value == CardValue.Nemesis)
         {
             PlaySpecialCardVoiceClientRpc((int)drawn.Value);
 
@@ -2051,7 +2047,28 @@ public class GamePlayManager : NetworkBehaviour
             }
             return;
         }
+        else if (discardValue == CardValue.Nemesis)
+        {
+            ShowPowerMessageClientRpc(playerIndex, "Nemesis's Power", 1.5f);
+            ResetTurnTimerClientRpc(playerIndex, turnTimerDuration);
 
+            if (IsHost)
+                ResetAndRestartTurnTimerCoroutine();
+
+            StartNemesisLocalOnlyClientRpc(
+                senderClientId,
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } }
+                }
+            );
+
+            // Bot support
+            if (IsHost && IsBotClientId(senderClientId))
+                Nemesis.Instance.StartBotNemesisCurse(senderClientId);
+
+            return;
+        }
         else if (discardValue == CardValue.Skip)
         {
             ShowPowerMessageClientRpc(playerIndex, "Skip Activated");
@@ -2088,12 +2105,21 @@ public class GamePlayManager : NetworkBehaviour
             case CardValue.King: clip = kingVoiceClip; break;
             case CardValue.Fiend: clip = fiendVoiceClip; break;
             case CardValue.GoldenJack: clip = goldenJackVoiceClip; break;
+            case CardValue.Nemesis : clip = nemesisVoiceClip; break;
         }
         if (clip != null)
         {
             _audioSource.volume = 1f;
             _audioSource.PlayOneShot(clip);
         }
+    }
+
+    [ClientRpc]
+    void StartNemesisLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
+    {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        Nemesis.Instance.StartNemesisPhase();
+        ShowTooltipOverlay("Nemesis: Pick a card to Curse!");
     }
 
     [ClientRpc]
@@ -2123,13 +2149,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void DiscardPeekedCardWithVisualClientRpc(int playerIndex, SerializableCard discardedCard, SerializableCard[] deck, SerializableCard[] wastePile)
     {
-        if (cardWastePile.transform.childCount > 0)
-        {
-            Transform prevTop = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1);
-            Card prevCard = prevTop.GetComponent<Card>();
-            if (prevCard != null && prevCard.specialOutline != null)
-                prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
-        }
+        HideNonTopWasteParticles();
         if (peekedCard != null)
         {
             Destroy(peekedCard.gameObject);
@@ -2226,6 +2246,7 @@ public class GamePlayManager : NetworkBehaviour
 
         wasteCards.Add(replacedSer);
 
+        turnEndedByTimeout = false;
         ReplaceHandCardClientRpc(playerIndex, handIndex, drawn, replacedSer, cards.ToArray(), wasteCards.ToArray(), false);
 
     }
@@ -2249,13 +2270,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (isKingRefillPhase) return;
 
-        if (cardWastePile.transform.childCount > 0)
-        {
-            Transform prevTop = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1);
-            Card prevCard = prevTop.GetComponent<Card>();
-            if (prevCard != null && prevCard.specialOutline != null)
-                prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
-        }
+        HideNonTopWasteParticles();
 
         int localSeat = GetLocalIndexFromGlobal(playerIndex);
         var p = players[localSeat];
@@ -2303,9 +2318,14 @@ public class GamePlayManager : NetworkBehaviour
         ShowReplacedMessageClientRpc(playerIndex);
         DisableUnoBtn();
 
-        if (turnEndedByTimeout) { turnEndedByTimeout = false; return; }
+        // Capture & clear the flag once
+        bool timedOut = turnEndedByTimeout;
+        turnEndedByTimeout = false;
+
+        // One sound, once
         CardGameManager.PlaySound(normal_click);
 
+        // Deck empty UI guard
         if (IsHost && cards.Count == 0)
         {
             unoBtn.SetActive(false);
@@ -2313,20 +2333,21 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject2.SetActive(false);
         }
 
-        if (turnEndedByTimeout)
+        // If the timer expired during the replace animation, force-advance now.
+        if (timedOut)
         {
-            turnEndedByTimeout = false;
             if (IsHost) StartCoroutine(DelayedNextPlayerTurn(0.2f));
             return;
         }
 
-        // Normal path
+        // Normal path → host schedules next turn
         if (IsHost)
         {
             var playerList = MultiplayerManager.Instance.playerDataNetworkList;
             bool isBot = (playerIndex >= 0 && playerIndex < playerList.Count && playerList[playerIndex].clientId >= 9000);
             if (!isBot) StartCoroutine(DelayedNextPlayerTurn(2.5f));
         }
+
     }
 
     private IEnumerator _FlyOldToWaste(Card oldCard, Vector3 fromWorld)
@@ -2365,13 +2386,7 @@ public class GamePlayManager : NetworkBehaviour
     [ClientRpc]
     void ShowWastePileCardClientRpc(int cardType, int cardValue)
     {
-        if (cardWastePile.transform.childCount > 0)
-        {
-            Transform prevTop = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1);
-            Card prevCard = prevTop.GetComponent<Card>();
-            if (prevCard != null && prevCard.specialOutline != null)
-                prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
-        }
+        HideNonTopWasteParticles();
         var discard = Instantiate(_cardPrefab, cardDeckTransform.position, Quaternion.identity, cardWastePile.transform);
 
         discard.Type = (CardType)cardType;
@@ -2439,7 +2454,7 @@ public class GamePlayManager : NetworkBehaviour
                 isUserPlayer = sorted[i].isUserPlayer,
                 cards = sorted[i].cardsPanel.cards
                     .Where(c => c != null)
-                    .Select(c => new SerializableCard(c.Type, c.Value))
+                    .Select(c => new SerializableCard(c.Type, c.Value, c.IsCursed))
                     .ToArray()
             };
         }
@@ -2541,8 +2556,15 @@ public class GamePlayManager : NetworkBehaviour
 
     private bool IsSpecialCard(CardValue value)
     {
-        return value == CardValue.King || value == CardValue.Queen || value == CardValue.Jack || value == CardValue.Fiend || value == CardValue.GoldenJack || value == CardValue.Skip;
+        return value == CardValue.King
+            || value == CardValue.Queen
+            || value == CardValue.Jack
+            || value == CardValue.Fiend
+            || value == CardValue.GoldenJack
+            || value == CardValue.Skip
+            || value == CardValue.Nemesis;
     }
+
 
     private bool ShouldShowWasteArrow()
     {
@@ -2922,6 +2944,23 @@ public class GamePlayManager : NetworkBehaviour
             Debug.LogWarning("[Tooltip] No click targets assigned/found. Assign Dimed/Popup Buttons in the Inspector.");
     }
 
+    private void HideNonTopWasteParticles()
+    {
+        if (cardWastePile == null || cardWastePile.transform.childCount == 0) return;
+
+        Transform prevTop = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1);
+        var prevCard = prevTop ? prevTop.GetComponent<Card>() : null;
+        if (prevCard == null) return;
+
+        // Special outline particle
+        if (prevCard.specialOutline != null && prevCard.specialOutline.transform.childCount > 0)
+            prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
+
+        // Cursed outline particle
+        if (prevCard.cursedOutline != null && prevCard.cursedOutline.transform.childCount > 0)
+            prevCard.cursedOutline.transform.GetChild(0).gameObject.SetActive(false);
+    }
+
 }
 
 [System.Serializable]
@@ -2929,12 +2968,16 @@ public struct SerializableCard : INetworkSerializable
 {
     public CardType Type;
     public CardValue Value;
-    public SerializableCard(CardType t, CardValue v) { Type = t; Value = v; }
+    public bool IsCursed;
+
+    public SerializableCard(CardType t, CardValue v, bool cursed = false)
+    { Type = t; Value = v; IsCursed = cursed; }
 
     public void NetworkSerialize<T>(Unity.Netcode.BufferSerializer<T> serializer) where T : Unity.Netcode.IReaderWriter
     {
         serializer.SerializeValue(ref Type);
         serializer.SerializeValue(ref Value);
+        serializer.SerializeValue(ref IsCursed);
     }
 }
 

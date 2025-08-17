@@ -213,8 +213,10 @@ public class WinnerUI : MonoBehaviour
                 var cardScript = cardObj.GetComponent<Card>();
                 cardScript.Type = card.Type;
                 cardScript.Value = card.Value;
+                cardScript.SetCursed(card.IsCursed);
                 cardScript.IsOpen = true;
                 cardScript.UpdateCard();
+                cardScript.UpdateCursedOutlineActive();
 
                 if (card.Value == CardValue.Zero && cardScript.specialOutline != null)
                     cardScript.specialOutline.SetActive(true);

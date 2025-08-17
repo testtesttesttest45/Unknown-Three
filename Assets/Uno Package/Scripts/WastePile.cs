@@ -39,25 +39,35 @@ public class WastePile : MonoBehaviour
         if (wasteCard.killedOutline != null && wasteCard.killedOutline.activeSelf)
         {
             wasteCard.IsClickable = false;
-            Debug.Log($"[WastePile] Waste card {wasteCard.name} is killed. Not clickable.");
             return;
         }
 
-        bool isTop = wasteCard.transform.GetSiblingIndex() == wasteCard.transform.parent.childCount - 1;
-        bool myTurn = GamePlayManager.instance.IsMyTurn();
-        bool isUser = GamePlayManager.instance.players[0].isUserPlayer;
-        bool hasPeeked = GamePlayManager.instance.hasPeekedCard;
+        bool isTop = IsTopCard();
+        var gpm = GamePlayManager.instance;
 
-        bool canClick = NetworkManager.Singleton.IsClient &&
-                        myTurn &&
-                        isUser &&
-                        !hasPeeked &&
-                        isTop;
+        bool suppress =
+            gpm.wasteInteractionStarted ||
+            gpm.deckInteractionLocked ||
+            gpm.isTurnEnding;
 
-        // Debug.Log($"[WastePile] Waste card {wasteCard.name} - isTop: {isTop}, myTurn: {myTurn}, isUser: {isUser}, hasPeeked: {hasPeeked} → canClick: {canClick}");
+        bool canClick =
+            NetworkManager.Singleton.IsClient &&
+            gpm.IsMyTurn() &&
+            gpm.players[0].isUserPlayer &&
+            !gpm.hasPeekedCard &&
+            isTop &&
+            !suppress;
 
         wasteCard.IsClickable = canClick;
+        wasteCard.onClick = canClick ? OnWasteCardClicked : null; // extra safety check
     }
+
+    private bool IsTopCard()
+    {
+        if (wasteCard == null || wasteCard.transform.parent == null) return false;
+        return wasteCard.transform.GetSiblingIndex() == wasteCard.transform.parent.childCount - 1;
+    }
+
 
     public void Initialize(Card card)
     {
@@ -120,6 +130,10 @@ public class WastePile : MonoBehaviour
     {
         if (!isChoosing || wasteCard == null) return;
         isChoosing = false;
+
+
+        GamePlayManager.instance.deckInteractionLocked = true;
+        GamePlayManager.instance.wasteInteractionStarted = true;
 
         if (GamePlayManager.instance.turnTimeoutCoroutine != null)
         {
@@ -184,15 +198,5 @@ public class WastePile : MonoBehaviour
 
         GamePlayManager.instance.UpdateDeckClickability();
         GamePlayManager.instance.RefreshWasteInteractivity();
-    }
-
-
-    private bool IsTopCard()
-    {
-        if (wasteCard == null) return false;
-        if (wasteCard.transform.parent == null) return false;
-
-        int lastIndex = wasteCard.transform.parent.childCount - 1;
-        return wasteCard.transform.GetSiblingIndex() == lastIndex;
     }
 }
