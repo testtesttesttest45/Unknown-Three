@@ -192,7 +192,7 @@ public class King : NetworkBehaviour
             gpm.isKingRefillPhase = false;
             gpm.EndCurrentPowerAvatarFromServer();
             if (NetworkManager.Singleton.IsHost)
-                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
             return;
         }
 
@@ -249,13 +249,13 @@ public class King : NetworkBehaviour
                 gpm.EndAvatarForSeatFromServer(killerGlobalSeat);
 
             if (NetworkManager.Singleton.IsHost)
-                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
         }
         else
         {
             gpm.EndCurrentPowerAvatarFromServer();
             if (NetworkManager.Singleton.IsHost)
-                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
         }
     }
 
@@ -311,6 +311,20 @@ public class King : NetworkBehaviour
         lastKilledCardPos = killed.transform.position;
         lastKilledCardZRot = killed.transform.rotation.eulerAngles.z;
 
+        if (gpm.cardWastePile != null && gpm.cardWastePile.transform.childCount > 0)
+        {
+            Transform prevTop = gpm.cardWastePile.transform.GetChild(gpm.cardWastePile.transform.childCount - 1);
+            var prevCard = prevTop ? prevTop.GetComponent<Card>() : null;
+            if (prevCard != null)
+            {
+                if (prevCard.specialOutline != null && prevCard.specialOutline.transform.childCount > 0)
+                    prevCard.specialOutline.transform.GetChild(0).gameObject.SetActive(false);
+
+                if (prevCard.cursedOutline != null && prevCard.cursedOutline.transform.childCount > 0)
+                    prevCard.cursedOutline.transform.GetChild(0).gameObject.SetActive(false);
+            }
+        }
+
         var wasteObj = Object.Instantiate(
             gpm._cardPrefab,
             lastKilledCardPos,
@@ -335,6 +349,18 @@ public class King : NetworkBehaviour
             wasteObj.ShowKilledOutline(false);
         }
 
+        bool wasCursed =
+            (killed.IsCursed) ||
+            (killed.cursedOutline != null && killed.cursedOutline.activeSelf);
+
+        if (wasCursed)
+        {
+            wasteObj.SetCursed(true);
+
+            if (wasteObj.cursedOutline != null && wasteObj.cursedOutline.transform.childCount > 0)
+                wasteObj.cursedOutline.transform.GetChild(0).gameObject.SetActive(true);
+        }
+
         float randomRot = Random.Range(-50, 50f);
         gpm.StartCoroutine(gpm.AnimateCardMove(
             wasteObj, lastKilledCardPos, gpm.cardWastePile.transform.position, 0.3f, randomRot
@@ -342,6 +368,7 @@ public class King : NetworkBehaviour
 
         player.RemoveCard(killed, false);
     }
+
 
 
     [ClientRpc]
@@ -487,7 +514,7 @@ public class King : NetworkBehaviour
         }
 
         int cardCount = hand.Count;
-        if (cardCount <= 1) { if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f)); return; }
+        if (cardCount <= 1) { if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial)); return; }
 
         var indices = BuildRandomPermutation(cardCount);
 
@@ -516,7 +543,7 @@ public class King : NetworkBehaviour
         panel.UpdatePos();
 
         if (NetworkManager.Singleton.IsHost)
-            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f));
+            GamePlayManager.instance.StartCoroutine(GamePlayManager.instance.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
 
         yield break;
     }
@@ -525,7 +552,7 @@ public class King : NetworkBehaviour
     private void NotifyJumbleFinishedServerRpc(ServerRpcParams rpcParams = default)
     {
         if (NetworkManager.Singleton.IsServer)
-            gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+            gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
     }
 
     public void StartBotKingPhase(ulong botClientId)

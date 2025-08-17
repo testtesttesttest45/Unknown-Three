@@ -175,6 +175,10 @@ public class Queen : NetworkBehaviour
         var cardA = panelA.cards[cardAIndex];
         var cardB = panelB.cards[cardBIndex];
         if (cardA == null || cardB == null) return;
+        // Capture curse state BEFORE we modify anything
+        bool aWasCursed = (cardA != null) && (cardA.IsCursed || (cardA.cursedOutline && cardA.cursedOutline.activeSelf));
+        bool bWasCursed = (cardB != null) && (cardB.IsCursed || (cardB.cursedOutline && cardB.cursedOutline.activeSelf));
+
 
         panelA.cards[cardAIndex] = cardB;
         panelB.cards[cardBIndex] = cardA;
@@ -197,6 +201,20 @@ public class Queen : NetworkBehaviour
         movedB.IsOpen = false;
         movedB.UpdateCard();
         movedB.transform.SetParent(panelB.transform, true);
+
+        if (movedA != null)
+        {
+            movedA.SetCursed(bWasCursed);
+            // Hand cards should NOT show curse particles
+            if (movedA.cursedOutline && movedA.cursedOutline.transform.childCount > 0)
+                movedA.cursedOutline.transform.GetChild(0).gameObject.SetActive(false);
+        }
+        if (movedB != null)
+        {
+            movedB.SetCursed(aWasCursed);
+            if (movedB.cursedOutline && movedB.cursedOutline.transform.childCount > 0)
+                movedB.cursedOutline.transform.GetChild(0).gameObject.SetActive(false);
+        }
 
         // Fix indices
         playerA.ResyncCardIndices();
@@ -255,7 +273,7 @@ public class Queen : NetworkBehaviour
         gpm.EndCurrentPowerAvatarFromServer();
 
         if (IsHost)
-            gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0f));
+            gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0f, gpm.CurrentTurnSerial));
     }
 
     // bot handling

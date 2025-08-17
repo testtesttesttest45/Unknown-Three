@@ -216,7 +216,7 @@ public class Nemesis : NetworkBehaviour
         gpm.currentPowerOwnerGlobalSeat = -1;
 
         if (IsHost)
-            StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+            StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
     }
 
     // bot handling

@@ -116,7 +116,7 @@ public class WastePile : MonoBehaviour
         GamePlayManager.instance.hasPeekedCard = true;
 
         ulong myClientId = NetworkManager.Singleton.LocalClientId;
-        var peekedSerCard = new SerializableCard(wasteCard.Type, wasteCard.Value);
+        var peekedSerCard = new SerializableCard(wasteCard.Type, wasteCard.Value, wasteCard.IsCursed);
         GamePlayManager.instance.peekedCardsByClientId[myClientId] = peekedSerCard;
 
         if (!NetworkManager.Singleton.IsServer)
@@ -145,8 +145,8 @@ public class WastePile : MonoBehaviour
         StopAllCoroutines();
         DisableHandGlow();
 
-        SerializableCard newCard = new SerializableCard(wasteCard.Type, wasteCard.Value);
-        SerializableCard replacedCard = new SerializableCard(handCard.Type, handCard.Value);
+        SerializableCard newCard = new SerializableCard(wasteCard.Type, wasteCard.Value, wasteCard.IsCursed);
+        SerializableCard replacedCard = new SerializableCard(handCard.Type, handCard.Value, handCard.IsCursed);
 
         wasteCard = null;
 

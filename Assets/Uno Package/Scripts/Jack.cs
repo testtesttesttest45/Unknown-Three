@@ -328,7 +328,7 @@ public class Jack : NetworkBehaviour
         gpm.currentPowerOwnerGlobalSeat = -1;
 
         if (IsHost)
-            StartCoroutine(gpm.DelayedNextPlayerTurn(1.0f));
+            StartCoroutine(gpm.DelayedNextPlayerTurn(1f, gpm.CurrentTurnSerial));
     }
 
     [ClientRpc]

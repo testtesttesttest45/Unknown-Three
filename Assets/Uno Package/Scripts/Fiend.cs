@@ -157,7 +157,7 @@ public class Fiend : NetworkBehaviour
             () =>
             {
                 gpm.EndCurrentPowerAvatarFromServer();
-                if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
             }
         ));
     }
@@ -213,7 +213,7 @@ public class Fiend : NetworkBehaviour
                 if (IsHost)
                 {
                     gpm.EndCurrentPowerAvatarFromServer();
-                    gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+                    gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
                 }
             }
         ));
@@ -386,6 +386,6 @@ public class Fiend : NetworkBehaviour
     private void FinishPowerAndAdvanceTurn()
     {
         gpm.EndCurrentPowerAvatarFromServer();
-        if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f));
+        if (IsHost) gpm.StartCoroutine(gpm.DelayedNextPlayerTurn(0.5f, gpm.CurrentTurnSerial));
     }
 }
