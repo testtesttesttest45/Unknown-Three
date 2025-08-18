@@ -71,6 +71,7 @@ public class GamePlayManager : NetworkBehaviour
     public AudioClip kingVoiceClip;
     public AudioClip fiendVoiceClip;
     public AudioClip nemesisVoiceClip;
+    public AudioClip scoutVoiceClip;
     public AudioClip fiendRevengeVoiceClip;
     public AudioClip jackSpecialVoiceClip;
     public AudioClip goldenJackVoiceClip;
@@ -115,6 +116,7 @@ public class GamePlayManager : NetworkBehaviour
     public Sprite avatarFiend;
     public Sprite avatarGoldenJack;
     public Sprite avatarNemesis;
+    public Sprite avatarScout;
     [Tooltip("How long the power avatar stays before reverting")]
     public float specialAvatarDuration = 2f;
     private List<Sprite> baseAvatarSprites;
@@ -170,6 +172,7 @@ public class GamePlayManager : NetworkBehaviour
     private Coroutine _pendingAdvanceCo;
     public int CurrentTurnSerial => _turnSerial;
 
+    public static bool AddScoutCards = true;
     public static bool GameHasEnded { get; private set; } = false;
     public static void ResetGameHasEnded()
     {
@@ -285,6 +288,10 @@ public class GamePlayManager : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        base.OnNetworkSpawn();
+        if (MultiplayerManager.Instance != null)
+            AddScoutCards = MultiplayerManager.Instance.ScoutsEnabled.Value;
+
         SetupAllPlayerPanels();
 
         if (IsHost)
@@ -805,6 +812,7 @@ public class GamePlayManager : NetworkBehaviour
             case CardValue.Fiend: s = avatarFiend; break;
             case CardValue.GoldenJack: s = avatarGoldenJack; break;
             case CardValue.Nemesis: s = avatarNemesis; break;
+            case CardValue.Scout: s = avatarScout; break;
         }
         if (s == null) return;
 
@@ -892,8 +900,8 @@ public class GamePlayManager : NetworkBehaviour
 
         List<CardValue> allValues = new List<CardValue>
         {
-             CardValue.Ten,
-            CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend
+            CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four, CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine, CardValue.Ten,
+            CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
         };
 
         // purple only have King, Queen, Jack
@@ -918,18 +926,17 @@ public class GamePlayManager : NetworkBehaviour
             cards.Add(card);
         }
 
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.Zero));
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
+        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
 
-        cards.Add(new SerializableCard(CardType.Gold, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Gold, CardValue.Zero));
-        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.Gold, CardValue.GoldenJack));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
-        cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Nemesis));
+        bool scoutsOn = (MultiplayerManager.Instance != null)
+            ? MultiplayerManager.Instance.ScoutsEnabled.Value
+            : AddScoutCards;
+
+        if (scoutsOn)
+            cards.Add(new SerializableCard(CardType.AntiMatter, CardValue.Scout));
 
         Debug.Log($"[CreateDeck] Deck created with {cards.Count} cards.");
         UpdateRemainingCardsCounter();
@@ -1296,6 +1303,7 @@ public class GamePlayManager : NetworkBehaviour
             _pendingAdvanceCo = null;
         }
     }
+
 
     public void RefreshWasteInteractivity()
     {
@@ -1738,6 +1746,11 @@ public class GamePlayManager : NetworkBehaviour
 
         card.IsOpen = true;
 
+        if (card.Value == CardValue.Scout)
+        {
+            ShowTooltipOverlay("Scout: Activate to reveal total card points of everyone. Keep in hands to passively siphon points info!");
+        }
+
         peekedCard = card;
         hasPeekedCard = true;
 
@@ -1918,7 +1931,7 @@ public class GamePlayManager : NetworkBehaviour
         wasteCards.Add(drawn);
 
         if (drawn.Value == CardValue.Jack || drawn.Value == CardValue.Queen || drawn.Value == CardValue.King
-    || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack || drawn.Value == CardValue.Nemesis)
+    || drawn.Value == CardValue.Fiend || drawn.Value == CardValue.GoldenJack || drawn.Value == CardValue.Nemesis || drawn.Value == CardValue.Scout)
         {
             PlaySpecialCardVoiceClientRpc((int)drawn.Value);
 
@@ -2105,6 +2118,30 @@ public class GamePlayManager : NetworkBehaviour
 
             return;
         }
+        else if (discardValue == CardValue.Scout)
+        {
+            ShowPowerMessageClientRpc(playerIndex, "Scout's Power", 3f);
+
+            const float peekSeconds = 4f;
+            
+            if (!IsBotClientId(senderClientId))
+            {
+                Scout.Instance.StartScoutRevealLocalOnlyClientRpc(
+                    senderClientId,
+                    peekSeconds,
+                    new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new List<ulong> { senderClientId } } }
+                );
+            }
+
+            Scout.Instance.ScoutFlashMarkedAllClientRpc(peekSeconds);
+
+            StartCoroutine(SafetyEndPowerAvatarAfter(currentPowerOwnerGlobalSeat, peekSeconds));
+            if (IsHost) _pendingAdvanceCo = StartCoroutine(DelayedNextPlayerTurn(peekSeconds, _turnSerial));
+            else EndTurnForAllClientRpc();
+            return;
+        }
+
+
         else if (discardValue == CardValue.Skip)
         {
             ShowPowerMessageClientRpc(playerIndex, "Skip Activated");
@@ -2141,6 +2178,7 @@ public class GamePlayManager : NetworkBehaviour
             case CardValue.Fiend: clip = fiendVoiceClip; break;
             case CardValue.GoldenJack: clip = goldenJackVoiceClip; break;
             case CardValue.Nemesis : clip = nemesisVoiceClip; break;
+            case CardValue.Scout: clip = scoutVoiceClip; break;
         }
         if (clip != null)
         {
@@ -2148,6 +2186,7 @@ public class GamePlayManager : NetworkBehaviour
             _audioSource.PlayOneShot(clip);
         }
     }
+
 
     [ClientRpc]
     void StartNemesisLocalOnlyClientRpc(ulong clientId, ClientRpcParams rpcParams = default)
@@ -2170,7 +2209,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Queen.Instance.StartQueenSwap();
-        ShowTooltipOverlay("Queen Power: Pick 2 cards to Swop!");
+        ShowTooltipOverlay("Queen: Pick 2 cards to Swop!");
     }
 
     [ClientRpc]
@@ -2178,7 +2217,7 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         King.Instance.StartKingPhase();
-        ShowTooltipOverlay("King Power: Pick a card to Kill!");
+        ShowTooltipOverlay("King: Pick a card to Kill!");
     }
 
     [ClientRpc]
@@ -2368,17 +2407,16 @@ public class GamePlayManager : NetworkBehaviour
             dur
         ));
 
+        if (Scout.Instance != null) Scout.Instance.NotifyHandChangedLocal();
+
         ShowReplacedMessageClientRpc(playerIndex);
         DisableUnoBtn();
 
-        // Capture & clear the flag once
         bool timedOut = turnEndedByTimeout;
         turnEndedByTimeout = false;
 
-        // One sound, once
         CardGameManager.PlaySound(normal_click);
 
-        // Deck empty UI guard
         if (IsHost && cards.Count == 0)
         {
             unoBtn.SetActive(false);
@@ -2386,7 +2424,6 @@ public class GamePlayManager : NetworkBehaviour
             arrowObject2.SetActive(false);
         }
 
-        // If the timer expired during the replace animation, force-advance now.
         if (timedOut)
         {
             if (IsHost)
@@ -2405,7 +2442,6 @@ public class GamePlayManager : NetworkBehaviour
             if (!isBot)
                 _pendingAdvanceCo = StartCoroutine(DelayedNextPlayerTurn(2.5f, _turnSerial));
         }
-
     }
 
     private IEnumerator _FlyOldToWaste(Card oldCard, Vector3 fromWorld)
@@ -2635,7 +2671,8 @@ public class GamePlayManager : NetworkBehaviour
             || value == CardValue.Fiend
             || value == CardValue.GoldenJack
             || value == CardValue.Skip
-            || value == CardValue.Nemesis;
+            || value == CardValue.Nemesis
+            || value == CardValue.Scout ;
     }
 
 

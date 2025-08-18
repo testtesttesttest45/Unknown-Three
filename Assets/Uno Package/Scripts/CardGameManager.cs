@@ -207,5 +207,5 @@ public enum CardType
 
 public enum CardValue
 {
-    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend, GoldenJack, Nemesis
+    Zero, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Skip, Fiend, GoldenJack, Nemesis, Scout
 }

@@ -23,6 +23,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
     public GameObject eyeOutline;
     public GameObject specialOutline;
     public GameObject cursedOutline;
+    public GameObject scoutOutline;
     private bool _isCursed = false;
     public bool IsCursed => _isCursed;
 
@@ -171,6 +172,32 @@ public class Card : MonoBehaviour, IPointerClickHandler
             if (eyeOutline != null) eyeOutline.SetActive(false);
             if (specialOutline != null) specialOutline.SetActive(false);
         }
+        else if (Type == CardType.AntiMatter && Value == CardValue.Scout)
+        {
+            if (IsOpen)
+            {
+                spritePath = "Cards/AntiMatter"; // image only, no borders/effects
+                txt = "S";
+                label1.color = Color.white;
+                label2.color = Color.white;
+                label3.color = Color.white;
+                label1.text = txt;
+                label2.text = txt;
+                label3.text = txt;
+            }
+            else
+            {
+                spritePath = "Cards/CardBack";
+                label1.text = label2.text = label3.text = "";
+            }
+
+            if (glowOutline != null) glowOutline.SetActive(false);
+            if (killedOutline != null) killedOutline.SetActive(false);
+            if (markedOutline != null) markedOutline.SetActive(false);
+            if (eyeOutline != null) eyeOutline.SetActive(false);
+            if (specialOutline != null) specialOutline.SetActive(false);
+            if (cursedOutline != null) cursedOutline.SetActive(false);
+        }
         else
         {
             if (IsOpen)
@@ -231,6 +258,7 @@ public class Card : MonoBehaviour, IPointerClickHandler
             loadedSprite = Resources.Load<Sprite>("Cards/BlankCard");
         GetComponent<Image>().sprite = loadedSprite;
         UpdateCursedOutlineActive();
+        UpdateScoutOutlineActive();
     }
 
 
@@ -401,4 +429,10 @@ public class Card : MonoBehaviour, IPointerClickHandler
         flashCursedRoutine = null;
     }
 
+    private void UpdateScoutOutlineActive()
+    {
+        if (scoutOutline == null) return;
+        bool isScout = (Type == CardType.AntiMatter && Value == CardValue.Scout);
+        scoutOutline.SetActive(isScout && IsOpen);
+    }
 }

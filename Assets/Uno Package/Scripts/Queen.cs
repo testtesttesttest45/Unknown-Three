@@ -268,6 +268,8 @@ public class Queen : NetworkBehaviour
         cardInA.FlashMarkedOutline();
         cardInB.FlashMarkedOutline();
 
+        if (Scout.Instance != null) Scout.Instance.NotifyHandChangedLocal();
+
         yield return new WaitForSeconds(2f);
 
         gpm.EndCurrentPowerAvatarFromServer();

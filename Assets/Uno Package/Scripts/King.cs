@@ -400,6 +400,8 @@ public class King : NetworkBehaviour
             gpm._audioSource.PlayOneShot(gpm.draw_card_clip, 0.9f);
 
         gpm.UpdateDeckVisualLocal(newDeck);
+
+        if (Scout.Instance != null) Scout.Instance.NotifyHandChangedLocal();
     }
 
     private static IEnumerator KingAnimateDeckToHandSlotAndInsert(

@@ -225,7 +225,7 @@ public class Nemesis : NetworkBehaviour
     private IEnumerator BotNemesis(ulong botClientId)
     {
         isNemesisPhase = true;
-        yield return new WaitForSeconds(Random.Range(0.8f, 1.6f));
+        yield return new WaitForSeconds(Random.Range(1f, 2f));
 
         var seats = new List<int>();
         for (int seat = 0; seat < gpm.players.Count; seat++)

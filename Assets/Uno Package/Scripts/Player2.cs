@@ -1,9 +1,10 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class Player2 : MonoBehaviour
 {
@@ -58,6 +59,8 @@ public class Player2 : MonoBehaviour
 
     [Header("Spotlight/Trophy")]
     public GameObject TrophyBackground;
+
+    public TextMeshProUGUI totalPointsTMP;
 
     public void SetAvatarProfile(AvatarProfile p)
     {

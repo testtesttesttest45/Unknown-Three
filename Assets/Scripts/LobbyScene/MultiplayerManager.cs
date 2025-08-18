@@ -554,4 +554,14 @@ public class MultiplayerManager : NetworkBehaviour
         Instance = null;
     }
 
+    public NetworkVariable<bool> ScoutsEnabled =
+    new NetworkVariable<bool>(true,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetScoutsEnabledServerRpc(bool enabled)
+    {
+        ScoutsEnabled.Value = enabled;
+    }
 }
