@@ -80,7 +80,6 @@ public class Jack : NetworkBehaviour
     {
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
         if (!gpm.IsMyTurn() || !gpm.players[0].isUserPlayer) return;
-        gpm.ShowTooltipOverlay("Jack Power: Pick a card to Reveal!");
         isJackRevealPhase = true;
 
         for (int seat = 0; seat < gpm.players.Count; seat++)
@@ -343,7 +342,6 @@ public class Jack : NetworkBehaviour
         if (gpm == null || gpm.players == null || gpm.players.Count == 0) return;
         if (!gpm.IsMyTurn() || !gpm.players[0].isUserPlayer) return;
 
-        gpm.ShowTooltipOverlay("Golden Jack Power: Pick a card to Reveal!");
         isGoldenJackRevealPhase = true;
 
         for (int seat = 0; seat < gpm.players.Count; seat++)

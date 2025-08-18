@@ -302,7 +302,8 @@ public class King : NetworkBehaviour
         Card killed = player.cardsPanel.cards[cardIndex];
         if (killed == null) return;
 
-        if (killed.Value == CardValue.One && killerGlobalSeat != globalSeat && gpm._audioSource != null)
+
+        if ((killed.Value == CardValue.One || killed.Value == CardValue.Scout) && killerGlobalSeat != globalSeat && gpm._audioSource != null)
         {
             if (gpm.goodKill != null) gpm._audioSource.PlayOneShot(gpm.goodKill, 1.2f);
             if (gpm.special_click != null) gpm._audioSource.PlayOneShot(gpm.special_click, 1.0f);

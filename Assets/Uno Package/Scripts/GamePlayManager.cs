@@ -55,7 +55,7 @@ public class GamePlayManager : NetworkBehaviour
     public List<SerializableCard> wasteCards;
     private int peekedDeckIndex = -1;
     private Coroutine turnTimerCoroutine;
-    public float turnTimerDuration = 10f;
+    public float turnTimerDuration = 12f;
     public float turnTimerLeft = 0f;
     public bool isTurnEnding = false;
     public bool deckInteractionLocked = false;
@@ -167,6 +167,7 @@ public class GamePlayManager : NetworkBehaviour
     [SerializeField] private CanvasGroup tooltipCanvasGroup;
     [SerializeField] private float fadeDuration = 0.25f;
     private Coroutine tooltipFadeRoutine;
+    private Coroutine tooltipDelayRoutine;
 
     private int _turnSerial = 0;
     private Coroutine _pendingAdvanceCo;
@@ -1746,9 +1747,11 @@ public class GamePlayManager : NetworkBehaviour
 
         card.IsOpen = true;
 
-        if (card.Value == CardValue.Scout)
+        string tip;
+        if (CardTooltipDB.TryBuild(card.Value, out tip))
         {
-            ShowTooltipOverlay("Scout: Activate to reveal total card points of everyone. Keep in hands to passively siphon points info!");
+            if (tooltipDelayRoutine != null) StopCoroutine(tooltipDelayRoutine);
+            tooltipDelayRoutine = StartCoroutine(ShowTipDelayed(tip, 0.4f, card));
         }
 
         peekedCard = card;
@@ -1771,6 +1774,18 @@ public class GamePlayManager : NetworkBehaviour
 
         if (!IsHost || (IsHost && !NetworkManager.Singleton.IsServer))
             NotifyHostPeekedCardServerRpc((int)card.Type, (int)card.Value);
+    }
+
+    private IEnumerator ShowTipDelayed(string tip, float delay, Card cardCtx)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (CardGameManager.ShowTooltips && hasPeekedCard && peekedCard == cardCtx)
+        {
+            ShowTooltipOverlay(tip);
+        }
+
+        tooltipDelayRoutine = null;
     }
 
     public void NotifyWasteInteractionStarted()
@@ -2193,7 +2208,6 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Nemesis.Instance.StartNemesisPhase();
-        ShowTooltipOverlay("Nemesis: Pick a card to Curse!");
     }
 
     [ClientRpc]
@@ -2201,7 +2215,6 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Fiend.Instance.ShowFiendPopup();
-        ShowTooltipOverlay("Fiend: Pick a player to Jumble his cards!");
     }
 
     [ClientRpc]
@@ -2209,7 +2222,6 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         Queen.Instance.StartQueenSwap();
-        ShowTooltipOverlay("Queen: Pick 2 cards to Swop!");
     }
 
     [ClientRpc]
@@ -2217,7 +2229,6 @@ public class GamePlayManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.LocalClientId != clientId) return;
         King.Instance.StartKingPhase();
-        ShowTooltipOverlay("King: Pick a card to Kill!");
     }
 
     [ClientRpc]
@@ -2988,16 +2999,41 @@ public class GamePlayManager : NetworkBehaviour
         if (!CardGameManager.ShowTooltips) return;
         if (tooltipParent == null || tooltipText == null) return;
 
+        tooltipText.richText = true;
+        tooltipText.enableWordWrapping = true;
+        tooltipText.overflowMode = TMPro.TextOverflowModes.Overflow; // let container handle clipping/scroll
+
         tooltipText.text = text;
+
+        // Show and bring to front
         tooltipParent.SetActive(true);
         tooltipParent.transform.SetAsLastSibling();
 
+        // Optional: remove auto-hide for readability; tap anywhere to close instead
         if (tooltipCanvasGroup == null)
             tooltipCanvasGroup = tooltipParent.GetComponent<CanvasGroup>();
+        tooltipCanvasGroup.alpha = 1f;
+
+        if (tooltipDimmedButton != null)
+        {
+            tooltipDimmedButton.onClick.RemoveAllListeners();
+            tooltipDimmedButton.onClick.AddListener(HideTooltip);
+        }
+        if (tooltipPopupButton != null)
+        {
+            tooltipPopupButton.onClick.RemoveAllListeners();
+            tooltipPopupButton.onClick.AddListener(HideTooltip);
+        }
 
         if (tooltipFadeRoutine != null) StopCoroutine(tooltipFadeRoutine);
         tooltipFadeRoutine = StartCoroutine(FadeTooltip(1f));
     }
+
+    public void HideTooltip()
+    {
+        if (tooltipParent != null) tooltipParent.SetActive(false);
+    }
+
 
     public void HideTooltipOverlay()
     {
