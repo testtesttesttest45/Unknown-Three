@@ -1270,11 +1270,12 @@ public class GamePlayManager : NetworkBehaviour
         {
             var newTop = cardWastePile.transform.GetChild(cardWastePile.transform.childCount - 1)
                                                 .GetComponent<Card>();
-            if (newTop != null && newTop.cursedOutline != null)
+            if (newTop != null)
             {
-                newTop.cursedOutline.SetActive(newTop.IsCursed);
-                if (newTop.IsCursed && newTop.cursedOutline.transform.childCount > 0)
-                    newTop.cursedOutline.transform.GetChild(0).gameObject.SetActive(true);
+                newTop.UpdateCursedOutlineActive();
+                var co = newTop.cursedOutline;
+                if (co != null && co.activeSelf && co.transform.childCount > 0)
+                    co.transform.GetChild(0).gameObject.SetActive(true);
             }
         }
     }
@@ -2285,12 +2286,10 @@ public class GamePlayManager : NetworkBehaviour
         {
             card.transform.SetParent(cardWastePile.transform, true); // keep exact world pos
             card.transform.SetAsLastSibling();
-            if (card.cursedOutline != null && card.IsCursed)
-            {
-                card.cursedOutline.SetActive(true);
-                if (card.cursedOutline.transform.childCount > 0)
-                    card.cursedOutline.transform.GetChild(0).gameObject.SetActive(true);
-            }
+            card.UpdateCursedOutlineActive();
+            var co = card.cursedOutline;
+            if (co != null && co.activeSelf && co.transform.childCount > 0)
+                co.transform.GetChild(0).gameObject.SetActive(true);
 
             RefreshWasteInteractivity();
             if (IsServer) PlayDrawCardSoundClientRpc();
@@ -2468,12 +2467,10 @@ public class GamePlayManager : NetworkBehaviour
 
         oldCard.transform.SetParent(cardWastePile.transform, true);
         oldCard.transform.SetAsLastSibling();
-        if (oldCard.cursedOutline != null && oldCard.IsCursed)
-        {
-            oldCard.cursedOutline.SetActive(true);
-            if (oldCard.cursedOutline.transform.childCount > 0)
-                oldCard.cursedOutline.transform.GetChild(0).gameObject.SetActive(true);
-        }
+        oldCard.UpdateCursedOutlineActive();
+        var co = oldCard.cursedOutline;
+        if (co != null && co.activeSelf && co.transform.childCount > 0)
+            co.transform.GetChild(0).gameObject.SetActive(true);
 
         var wp = oldCard.GetComponent<WastePile>();
         if (wp == null) wp = oldCard.gameObject.AddComponent<WastePile>();
@@ -2508,13 +2505,7 @@ public class GamePlayManager : NetworkBehaviour
         discard.IsClickable = false;
         discard.SetCursed(isCursed);
 
-        // turn on cursed outline/particles for the new TOP
-        if (discard.cursedOutline != null)
-        {
-            discard.cursedOutline.SetActive(isCursed);
-            if (isCursed && discard.cursedOutline.transform.childCount > 0)
-                discard.cursedOutline.transform.GetChild(0).gameObject.SetActive(true);
-        }
+        discard.UpdateCursedOutlineActive();
 
         var wp = discard.gameObject.AddComponent<WastePile>();
         wp.Initialize(discard);

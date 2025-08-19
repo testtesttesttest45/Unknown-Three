@@ -23,7 +23,7 @@ public static class CardTooltipDB
             Title   = "Golden Jack",
             Activate= "Reveal a player's hand cards.",
             Bonus   = "Exposes the player with a Zero card.",
-            Revenge = "When killed, exposes the killer's cards to everyone."
+            Revenge = "When killed, exposes the killer's cards to everyone. Can be picked up again."
         }},
         { CardValue.Fiend, new Sections {
             Title   = "Fiend",

@@ -4,6 +4,7 @@ using TMPro;
 using Unity.Netcode;
 using Unity.Services.Lobbies.Models;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class CharacterSelectUI : MonoBehaviour
@@ -15,6 +16,11 @@ public class CharacterSelectUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI readyButtonText;
     [SerializeField] private Button addBotButton;
     [SerializeField] private Button addSuperbotButton;
+
+    [SerializeField] private Button scoutsInfoButton;
+    [SerializeField] private GameObject scoutsInfoPanel;
+    [SerializeField] private CanvasGroup scoutsInfoCG;
+    [SerializeField] private float scoutsInfoFade = 0.15f;
 
     [SerializeField] private Toggle tooltipsToggle;
     [SerializeField] private Button tooltipsToggleParent;
@@ -101,6 +107,9 @@ public class CharacterSelectUI : MonoBehaviour
                     tooltipsToggle.isOn = !tooltipsToggle.isOn;
             });
         }
+
+        InitScoutsInfoPanel();
+        WireScoutsInfoHold();
     }
 
     private void Start()
@@ -246,4 +255,84 @@ public class CharacterSelectUI : MonoBehaviour
         Color disabledRed = new Color(0.86f, 0.22f, 0.22f);
         scoutsStatusLabel.color = enabled ? enabledGreen : disabledRed;
     }
+
+    private Coroutine scoutsInfoFadeCo;
+
+    private void InitScoutsInfoPanel()
+    {
+        if (scoutsInfoPanel == null) return;
+
+        if (scoutsInfoCG == null)
+            scoutsInfoCG = scoutsInfoPanel.GetComponent<CanvasGroup>();
+        if (scoutsInfoCG == null)
+            scoutsInfoCG = scoutsInfoPanel.AddComponent<CanvasGroup>();
+
+        scoutsInfoPanel.SetActive(true);
+        scoutsInfoCG.alpha = 0f;
+        scoutsInfoCG.blocksRaycasts = false;
+        scoutsInfoCG.interactable = false;
+    }
+
+    private void WireScoutsInfoHold()
+    {
+        if (scoutsInfoButton == null) return;
+
+        var et = scoutsInfoButton.GetComponent<EventTrigger>();
+        if (et == null) et = scoutsInfoButton.gameObject.AddComponent<EventTrigger>();
+        et.triggers ??= new List<EventTrigger.Entry>();
+        et.triggers.Clear();
+
+        void AddTrigger(EventTriggerType type, System.Action cb)
+        {
+            var entry = new EventTrigger.Entry { eventID = type };
+            entry.callback.AddListener(_ => cb());
+            et.triggers.Add(entry);
+        }
+
+        AddTrigger(EventTriggerType.PointerDown, () => SetScoutsInfoVisible(true));
+        AddTrigger(EventTriggerType.PointerUp, () => SetScoutsInfoVisible(false));
+        AddTrigger(EventTriggerType.PointerExit, () => SetScoutsInfoVisible(false));
+        AddTrigger(EventTriggerType.Cancel, () => SetScoutsInfoVisible(false));
+        AddTrigger(EventTriggerType.EndDrag, () => SetScoutsInfoVisible(false));
+    }
+
+    private void SetScoutsInfoVisible(bool show)
+    {
+        if (scoutsInfoPanel == null || scoutsInfoCG == null) return;
+
+        if (scoutsInfoFadeCo != null) StopCoroutine(scoutsInfoFadeCo);
+        scoutsInfoFadeCo = StartCoroutine(FadeScoutsInfo(show ? 1f : 0f));
+    }
+
+    private IEnumerator FadeScoutsInfo(float targetAlpha)
+    {
+        float start = scoutsInfoCG.alpha;
+        float t = 0f;
+
+        if (targetAlpha > 0f)
+        {
+            scoutsInfoPanel.SetActive(true);
+            scoutsInfoCG.blocksRaycasts = true;
+            scoutsInfoCG.interactable = true;
+        }
+
+        while (t < scoutsInfoFade)
+        {
+            t += Time.unscaledDeltaTime;
+            scoutsInfoCG.alpha = Mathf.Lerp(start, targetAlpha, t / scoutsInfoFade);
+            yield return null;
+        }
+        scoutsInfoCG.alpha = targetAlpha;
+
+        if (Mathf.Approximately(targetAlpha, 0f))
+        {
+            // hide & don’t intercept clicks
+            scoutsInfoCG.blocksRaycasts = false;
+            scoutsInfoCG.interactable = false;
+            scoutsInfoPanel.SetActive(false);
+        }
+
+        scoutsInfoFadeCo = null;
+    }
+
 }
