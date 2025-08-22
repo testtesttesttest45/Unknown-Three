@@ -44,26 +44,31 @@ Face cards have unique abilities. Their abilities can only be activated if playe
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Lobby.png" alt="Lobby" width="100%"/><br/>
   <em>Lobby</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Start-of-Game.png" alt="Start of Game" width="100%"/><br/>
   <em>Start of Game</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Wheelspin-decide-first-turn.png" alt="Wheelspin decide first turn" width="100%"/><br/>
   <em>Wheelspin decide first turn</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Draw-Deck-or-Waste-Pile.png" alt="Draw Deck or Waste Pile" width="100%"/><br/>
   <em>Draw Deck or Waste Pile</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Make-a-replacement.png" alt="Make a replacement" width="100%"/><br/>
   <em>Make a replacement</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Power-cards.png" alt="Power cards" width="100%"/><br/>
