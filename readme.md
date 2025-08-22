@@ -77,8 +77,7 @@ Face cards have unique abilities. Their abilities can only be activated if playe
 
 ## Links
 
-**Youtube Demo:**  
-[Watch on YouTube](https://www.youtube.com/watch?v=baRT5PIPnN8&feature=youtu.be)
+Youtube Demo: https://www.youtube.com/watch?v=baRT5PIPnN8
 
 [Unknown Three (Download for Windows)](https://mega.nz/file/6kkkkIib#SemrqiWrk7f7l4tbRLT0_uwtnLtfaHgiRy5FVB47ZoU)
 
