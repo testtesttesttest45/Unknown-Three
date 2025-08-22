@@ -1,151 +1,110 @@
-# Hungry News Overview
+<p align="center">
+  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/logo-1-768x768.png" alt="logo" width="300"/>
+</p>
 
-+ Hungry News is an app for Android phones. It offers a user friendly interface and displays quality, impactful articles all of which are worthy of reading.
+## Overview
 
-+ Every news articles is a takeaway of something happening around the world, with importance and legitimacy. Hence, readers are then able to stay up to date and can share with their friends and family. The app contains news that are always up to date. There is option to view detailed article. Lengthy news? Use the Summarise feature! If readers want more information about a news article they are reading, they can click the citation links. Don't want to read? Use the Listen feature!
+Unknown Three is a card game made for mobile devices. It features real time multiplayer played by 4 players.
 
-+ News are sorted by weeks. Readers can view news from the past weeks. They can also search for news articles. The app also has a feature to save news articles. The app also has a feature to view the news articles from Singapore.
+It features cards 1 to 10, with King, Queen, Jack, Fiend, Skip. There are also rare fun cards; the Zero card and Golden Jack.
 
-+ Fast and friendly interface with no bugs or ads.
+The goal of Unknown Three is to end the game with the least score among all players. The game ends when there are no more cards in the Main Deck.
 
-+ Project started on 16 November 2024 and completed on 27 December 2024, with plannings, researching, and learning new programming languages attempted 3 months prior when project idea was first crafted.
+In this game mode, each player starts with 3 cards placed in front of them faced down, side by side.
 
-## Installation
+Players can take a peek at their own left and right cards.
 
-### Android
-1. Download the APK file <a href="https://github.com/testtesttesttest45/Hungry-News/releases/download/v1/hungry_news.apk" download>here</a>.
+On a player’s turn, he can draw a card from the Main Deck. After looking at the card’s value, he can choose to replace with one if his existing 3 cards, or he can Discard. Cards in Waste Pile are always face-up.
 
-### Documentation attached <a href="https://drive.google.com/file/d/1sLwXMablZD_wxT48DldxeKpnlVRMIHQQ/view?usp=drive_link" target="_blank">here</a>.
+If he replaces the new card with one of his existing cards, the original card would go to the Waste Pile, while the new card will replace that spot.
 
-### Demo
-A demo of the application is available on YouTube <a href="https://www.youtube.com/watch?v=HwIwd8xTI7U" target="_blank">here</a>.
+If he discards the new card instead, the new card goes to the Waste Pile.
 
-## How is this app made?
+Players do not necessary need to always draw cards from the Main Deck. They have another choice; picking cards from the Waste Pile, but they can only pick up the card on the top of the pile, provided that card is not marked as killed. With the card picked up, the player will need to replace with one of his existing cards. This means that when a player picks up a card from Waste Pile, everyone else would know the card value and position.
 
-### Frontend
+Face cards have unique abilities. Their abilities can only be activated if players draw from the Main Deck and discard the face card.
 
-+ The frontend of Hungry News was built using Flutter, an open-source framework developed by Google that enables developers to create cross-platform applications from a single codebase.
+- **Jack**: Reveals 1 card of any player for yourself.  
+  Additional ability: Alerts every player if a card with value 0 is detected. Won’t expose if you activated the Jack and have a Zero in your hand.
+- **Queen**: Swaps the position of 2 cards belonging to anyone
+- **King**: Kills 1 card of any player. Killed card will go to the Waste Pile but with an exception: It cannot be picked up by anyone as it has been marked as killed. Thereafter, a new card from the Main Deck will be placed at the position where the card was killed
+- **Fiend**: Jumble up any player’s cards.  
+  Additional ability: If a Fiend is killed by a King, the Fiend will jumble up the cards of whoever killed him
+- **Skip**: Skips the next player’s turn
+- **Golden Jack**: Reveals all hand card of any player for yourself.  
+  Additional ability: If a Golden Jack is killed by a King, the Golden Jack will reveal all hand card of whoever killed him to everyone. The killer won’t be able to see the revelation. Golden Jack cannot be killed, but can still be sent to Waste Pile by the King
+- **Nemesis**: Curses a card of any player permanently. No one else knows the card that was cursed and can only see which player had the cursed card. Cursed cards have value doubled
+- **Scout**: See total card points data of every player. If kept in hands, passively siphon total card points data of every players except yourself
 
-+ Flutter leverages the Dart programming language, which features a syntax similar to other C-like languages such as Java and JavaScript. This made it easier to build a robust and dynamic interface for the application.
+---
 
-+ User preferences, such as the app's theme and bookmarked news, are stored locally on the device. This eliminates the need for authentication, allowing multiple users to use the app on the same device without any login requirements.
+## Screenshots
 
-+ Smooth user experience: The app design ensures a clean and responsive interface for browsing, reading, and managing news.
+<table align="center">
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Lobby.png" alt="Lobby" width="400"/><br/>
+      <em>Lobby</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Start-of-Game.png" alt="Start of Game" width="400"/><br/>
+      <em>Start of Game</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Wheelspin-decide-first-turn.png" alt="Wheelspin decide first turn" width="400"/><br/>
+      <em>Wheelspin decide first turn</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Draw-Deck-or-Waste-Pile.png" alt="Draw Deck or Waste Pile" width="400"/><br/>
+      <em>Draw Deck or Waste Pile</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Make-a-replacement.png" alt="Make a replacement" width="400"/><br/>
+      <em>Make a replacement</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Power-cards.png" alt="Power cards" width="400"/><br/>
+      <em>Power cards</em>
+    </td>
+  </tr>
+</table>
 
-### Backend
-+ The backend was developed in Python, which provides flexibility and efficiency for handling server-side logic. It includes:
+---
 
-+ APIs: A set of methods and endpoints that the frontend calls to fetch news and interact with the database.
-Hosting: The backend code is hosted on Render, a cloud platform, ensuring that the application remains online and responsive at all times.
+## Links
 
-### Database
-+ The news headlines and their details, such as publication date, source, and impact level, are stored in a MySQL database. The database is part of a Hostinger plan that offers unlimited database storage for a limited time.
+**Youtube Demo:**  
+[Watch on YouTube](https://www.youtube.com/watch?v=baRT5PIPnN8&feature=youtu.be)
 
-+ Database optimizations include:
+[Unknown Three (Download for Windows)](https://mega.nz/file/6kkkkIib#SemrqiWrk7f7l4tbRLT0_uwtnLtfaHgiRy5FVB47ZoU)
 
-+ Table management: News older than three months is periodically deleted to reduce database size and improve performance.
+> ⚠️ Important note: When playing on Windows EXE build, please do not change the player names. This is auto-generated and if changed, the next instances will get the name you set from the persistent storage, resulting in all instances to use the same player name. If you have changed, no worries! It can easily be fixed by going to Windows Registry Editor and deleting the data there.  
+> To do this, go to **regedit > Computer > HKEY_CURRENT_USER > Software > DefaultCompany**. Then look for **Unknown Three** and right click → **Delete**. Done!
 
-### Machine Learning
-+ To deliver high-quality and impactful news that meets the project’s requirements, machine learning was integrated into the backend.
+[[PREFERRED] Unknown Three (Download for Android)](https://mega.nz/file/v592iRyS#EuePMF4RLIiQoS8ztbckZY4DGvSGY5xi1Nys5-9eiDY)
 
-### Model Creation and Training
-+ The machine learning model was built using scikit-learn (sklearn), a Python library offering tools for classification, regression, clustering, and dimensionality reduction.
-+ A dataset of approximately 1200 RSS news headlines from CNA and BBC was manually annotated based on perceived impact levels. Special attention was given to high-impact news, which is less frequent. Additional high-impact news was manually added to the dataset to balance the training process.
-+ The trained model was exported using joblib, resulting in a lightweight (~100KB) file.
+---
 
-### Model Hosting
-+ The model file was uploaded to AWS S3
-+ An AWS Lambda function was created to utilize the model for classifying and sorting current news headlines from RSS feeds. The Lambda function uses a container image to package the model and its dependencies, overcoming the size limitations of direct zip uploads.
+## Credits
 
+**=== Game Title ===**  
+Unknown Three  
 
-### Regular News Updates:
+**=== Created By ===**  
+Wei Lin, Developer  
 
-+ The Lambda function is triggered every hour using AWS EventBridge. It:
-+ Fetches the latest news headlines from CNA and BBC.
-+ Filters duplicates and similar news items using custom anti-duplication logic.
-+ Classifies news into impact levels using the trained model.
-+ Inserts unique news into the database, organized by publication date.
+**=== Made Using ===**  
+Unity 2022.3.61ft1  
 
-# Pages
+**=== Public Assets Used ===**  
+- Card template by Hurray: https://assetstore.unity.com/packages/templates/packs/hurray-color-cards-120992#version-current  
+- Power card voice lines by ElevenLabs: https://elevenlabs.io/  
+- Lobby and multiplayer by CodeMonkey: https://www.youtube.com/@CodeMonkeyUnity  
+- App Logo and Power cards avatar by ChatGPT image generator: https://chatgpt.com/  
+- Wheelspin and some UI by LayerLab: https://assetstore.unity.com/packages/2d/gui/gui-pro-super-casual-278534
 
-### Major News Page
-- This is the main page and purpose of the app. It displays only the highest impact news. Click on a news on this page or any other page to view the details and contents of the news. You can also Summarise the news, Listen to the news, or click on the citation links to view more information about the news.
-- This is made possible thanks to a Lambda script that executes occationally for the extraction of RSS feed from the news websites (CNA and BBC) and inserted into a database.
-
-### Past News Page
-- Displays major news from the past weeks, up to 12 weeks.
-
-### Curated News Page
-- Displays local Singapore news as well as global medium impact news.
-- Easy to use toggle buttons to filter news here based on "Singapore" and "All".
-
-### Saved News Page
-- Displays news that you have saved. You can save news by clicking on the "Save" icon on the news details page of any news.
-
-### Search News Page
-- Search for news articles by title. Searches up to 12 weeks of news.
-
-### Settings Page
-- Change the theme of the app to light or dark mode.
-- App state management: Reset the app to its initial state. All saved news, theme settings, and news marked as read will all be cleared.
-
-## Setup Instructions
-
-+ Clone the repository.
-+ Open the project in Visual Studio Code and set up the folders:
-
-### 1. `machine_learning` Folder
-This folder contains datasets for training the model.
-
-```bash
-cd machine_learning
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-# Create a folder "dataset" and add the dataset.csv file found in the GitHub repository releases.
-# Duplicate the dataset.csv file and rename it to "dataset_copy.csv" and place it outside the dataset folder.
-# A trained model is already provided in the GitHub repository releases. Place it in the machine_learning folder.
-# Else, to create a new model, run the following command:
-python main.py
-# The accuracy of the model depends on the manual ratings given in dataset.csv.
-# Upload this model to AWS S3 to update the model for the Lambda function.
-```
-
-### 2. `lambda` Folder
-This folder contains the Lambda function code.
-
-+ Not required to touch this folder unless the Lambda function needs to be updated.
-+ Check the database credentials in the code.
-+ The updating of the function from Docker to AWS Lambda is documented in the Documentation link above as well as instructions on how to debug locally.
-
-### 3. `hungry_news` Folder
-This folder contains the Flutter project.
-
-```bash
-cd hungry_news
-flutter pub get
-flutter run
-# Press Ctrl + Shift + P and select "Flutter: Select Device" to select an emulator or physical device to run the app on.
-# On any dart file in the pages folder, press F5 to run the app on an emulator or physical device.
-# To build the APK, run the following command:
-flutter build apk
-```
-
-### 4. `hungry_news/backend` Folder
-This folder contains the backend code that connects with the database.
-
-```bash
-cd hungry_news/backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-# Create an env file and add the database credentials:
-# DB_USER=u411477811_admin2
-# DB_PASSWORD=Lambdatest***
-# DB_HOST=srv1154.hstgr.io
-# DB_NAME=u411477811_lambdatest
-# Run the backend with the following command:
-python app.py
-# Use the IP address provided in the console to connect to the backend from the Flutter app if debugging on the Android Studio emulator; else, debug on Chrome works fine.
-# Be sure to update the backend URL in the Flutter app if testing locally.
-```
+---
