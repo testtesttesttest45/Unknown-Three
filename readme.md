@@ -84,7 +84,7 @@ Youtube Demo: https://www.youtube.com/watch?v=baRT5PIPnN8
 [Unknown Three (Download for Windows)](https://mega.nz/file/PxMHHTwK#yD6nUxeu7BZOTg1ugzN9BtV1BxWhjjQ8TouMo2YJinI) 
 > ⚠️ Important note: When playing on Windows EXE build, please do not change the player names. This is auto-generated and if changed, the next instances will get the name you set from the persistent storage, resulting in all instances to use the same player name. If you have changed, no worries! It can easily be fixed by going to Windows Registry Editor and deleting the data there. > To do this, go to **regedit > Computer > HKEY_CURRENT_USER > Software > DefaultCompany**. Then look for **Unknown Three** and right click → **Delete**. Done!
 
-[[PREFERRED] Unknown Three (Download for Android)](https://mega.nz/file/v592iRyS#EuePMF4RLIiQoS8ztbckZY4DGvSGY5xi1Nys5-9eiDY)
+[[PREFERRED] Unknown Three (Download for Android)](https://mega.nz/file/yhdljQ6R#5qDhPN6i52iPsB0enpgx6sw5ckcseGhsrDZeSmaRyW8)
 
 ---
 
