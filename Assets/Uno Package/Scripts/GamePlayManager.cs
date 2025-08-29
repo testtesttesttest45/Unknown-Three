@@ -901,7 +901,7 @@ public class GamePlayManager : NetworkBehaviour
 
         List<CardValue> allValues = new List<CardValue>
         {
-            CardValue.One, CardValue.Two, CardValue.Three, CardValue.Four, CardValue.Five, CardValue.Six, CardValue.Seven, CardValue.Eight, CardValue.Nine, CardValue.Ten,
+            
             CardValue.Jack, CardValue.Queen, CardValue.King, CardValue.Fiend, CardValue.Skip
         };
 
@@ -1150,6 +1150,9 @@ public class GamePlayManager : NetworkBehaviour
         }
         isTurnEnding = false;
         Jack.Instance.isJackRevealPhase = false;
+        Nemesis.Instance.isNemesisPhase = false;
+        King.Instance.isKingPhase = false;
+        Queen.Instance.isQueenSwapPhase = false;
         ulong curClientId = seatOrderGlobal[GetGlobalIndexFromLocal(currentPlayerIndex)];
         peekedCardsByClientId.Remove(curClientId);
         hasPeekedCard = false;
