@@ -74,11 +74,13 @@ Face cards have unique abilities. Their abilities can only be activated if playe
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Power-cards-1536x723.webp" alt="Power cards" width="100%"/><br/>
   <em>Power cards</em>
 </div>
+<br/><br/>
 
 <div align="center">
-  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Who-shall-get-the-best-card-1536x715.webp" alt="Who shall get the best card" width="100%"/><br/>
-  <em>Who shall get the best card</em>
+  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Who-shall-get-the-best-card-1536x715.webp" alt="Who shall get the best card?" width="100%"/><br/>
+  <em>Who shall get the best card?</em>
 </div>
+<br/><br/>
 
 <div align="center">
   <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Gameover-1536x722.png" alt="Gameover" width="100%"/><br/>
