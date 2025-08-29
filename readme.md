@@ -87,16 +87,14 @@ Face cards have unique abilities. Their abilities can only be activated if playe
 
 ---
 
-## Links
+## Links 
 
-Youtube Demo: <a href="https://www.youtube.com/watch?v=baRT5PIPnN8" target="_blank">https://www.youtube.com/watch?v=baRT5PIPnN8</a>
+Youtube Demo: https://www.youtube.com/watch?v=baRT5PIPnN8 
 
-<a href="https://mega.nz/file/PxMHHTwK#yD6nUxeu7BZOTg1ugzN9BtV1BxWhjjQ8TouMo2YJinI" target="_blank">Unknown Three (Download for Windows)</a>
+[Unknown Three (Download for Windows)](https://mega.nz/file/PxMHHTwK#yD6nUxeu7BZOTg1ugzN9BtV1BxWhjjQ8TouMo2YJinI) 
+> ⚠️ Important note: When playing on Windows EXE build, please do not change the player names. This is auto-generated and if changed, the next instances will get the name you set from the persistent storage, resulting in all instances to use the same player name. If you have changed, no worries! It can easily be fixed by going to Windows Registry Editor and deleting the data there. > To do this, go to **regedit > Computer > HKEY_CURRENT_USER > Software > DefaultCompany**. Then look for **Unknown Three** and right click → **Delete**. Done!
 
-> ⚠️ Important note: When playing on Windows EXE build, please do not change the player names. This is auto-generated and if changed, the next instances will get the name you set from the persistent storage, resulting in all instances to use the same player name. If you have changed, no worries! It can easily be fixed by going to Windows Registry Editor and deleting the data there.  
-> To do this, go to **regedit > Computer > HKEY_CURRENT_USER > Software > DefaultCompany**. Then look for **Unknown Three** and right click → **Delete**. Done!
-
-<a href="https://mega.nz/file/yhdljQ6R#5qDhPN6i52iPsB0enpgx6sw5ckcseGhsrDZeSmaRyW8" target="_blank">[PREFERRED] Unknown Three (Download for Android)</a>
+[[PREFERRED] Unknown Three (Download for Android)](https://mega.nz/file/yhdljQ6R#5qDhPN6i52iPsB0enpgx6sw5ckcseGhsrDZeSmaRyW8)
 
 ---
 
