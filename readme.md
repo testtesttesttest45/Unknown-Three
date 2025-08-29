@@ -59,7 +59,7 @@ Face cards have unique abilities. Their abilities can only be activated if playe
 <br/><br/>
 
 <div align="center">
-  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Draw-Deck-or-Waste-Pile-1536x726.webp" alt="Draw Deck or Waste Pile" width="100%"/><br/>
+  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Draw-Deck-or-Waste-Pile2-1536x726.png" alt="Draw Deck or Waste Pile" width="100%"/><br/>
   <em>Draw Deck or Waste Pile</em>
 </div>
 <br/><br/>
@@ -71,13 +71,13 @@ Face cards have unique abilities. Their abilities can only be activated if playe
 <br/><br/>
 
 <div align="center">
-  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Power-cards-1536x723.webp" alt="Power cards" width="100%"/><br/>
+  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Power-cards2-1536x723.png" alt="Power cards" width="100%"/><br/>
   <em>Power cards</em>
 </div>
 <br/><br/>
 
 <div align="center">
-  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Who-shall-get-the-best-card-1536x715.webp" alt="Who shall get the best card?" width="100%"/><br/>
+  <img src="https://quek-wei-lin-website.in/wp-content/uploads/2025/08/Who-shall-get-the-best-card2-1536x715.png" alt="Who shall get the best card?" width="100%"/><br/>
   <em>Who shall get the best card?</em>
 </div>
 <br/><br/>
