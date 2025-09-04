@@ -6,7 +6,7 @@
 
 Unknown Three is a card game made for mobile devices. It features real time multiplayer played by 4 players.
 
-It features cards 1 to 10, with King, Queen, Jack, Fiend, Skip. There are also rare fun cards; the Zero card and Golden Jack.
+It features cards 1 to 10, with King, Queen, Jack, Fiend, Skip. There are also rare fun cards; the Zero card, Nemesis, Scout and Golden Jack.
 
 The goal of Unknown Three is to end the game with the least score among all players. The game ends when there are no more cards in the Main Deck.
 
